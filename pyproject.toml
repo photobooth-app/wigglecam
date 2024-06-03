@@ -1,0 +1,23 @@
+[tool.ruff]
+line-length = 150
+extend-exclude = ["vendor"]
+
+[tool.ruff.lint]
+select = [
+  "E",  # pycodestyle
+  "W",  # pycodestyle
+  "F",  # pyflakes
+  "B",  # bugbear
+  "UP", # pyupgrade
+  "I",  # isort
+  #"D",   # pydocstyle   # add later
+]
+ignore = [
+  "B008", #used for DI injection
+]
+
+[tool.ruff.lint.per-file-ignores]
+"photobooth/services/config/groups/*.py" = ["E501"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"

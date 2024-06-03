@@ -1,0 +1,27 @@
+
+# ignore user folders
+/tmp
+/output_images
+/input_images/wiggle_*_*.jpg
+
+# python files
+__pycache__
+
+# env
+.env
+.env.*
+
+# pytest
+.coverage*
+coverage.xml
+junit/*
+/tests_tmp
+
+# build backends
+dist/*
+.pdm-python
+
+
+# ignore .DS_Store files in macos
+.DS_Store
+
