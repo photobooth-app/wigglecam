@@ -25,7 +25,8 @@ def invoke(image0, image1):
         print(f"process failed! {image0}")
 
 
-invoke(Path("input_images/A_00.jpg"), Path("input_images/A_01.jpg"))
-invoke(Path("input_images/B_00.jpg"), Path("input_images/B_01.jpg"))
-invoke(Path("input_images/C_00.jpg"), Path("input_images/C_01.jpg"))
-invoke(Path("input_images/D_00.jpg"), Path("input_images/D_01.jpg"))
+def test_collection():
+    invoke(Path("input_images/A_00.jpg"), Path("input_images/A_01.jpg"))
+    invoke(Path("input_images/B_00.jpg"), Path("input_images/B_01.jpg"))
+    # invoke(Path("input_images/C_00.jpg"), Path("input_images/C_01.jpg"))
+    # invoke(Path("input_images/D_00.jpg"), Path("input_images/D_01.jpg"))

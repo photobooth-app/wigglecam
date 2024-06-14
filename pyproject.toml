@@ -1,6 +1,35 @@
+
+[project]
+name = "photobooth-wigglecam"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [
+    {name = "michael", email = "me@mgrl.de"},
+]
+requires-python = ">=3.9"
+
+dependencies = [
+    "opencv-python>=4.8.1",
+    "numpy>=1.26.0",
+    "pillow>=10.0.0",
+]
+
+[tool.pdm.dev-dependencies]
+test = [
+  "pytest>=7.4.0",
+  "pytest-benchmark>=4.0.0",
+]
+lint = ["ruff>=0.1.8"]
+
+
+[tool.pdm.scripts]
+test = "pytest --basetemp=./tests_tmp/ -v ./tests"
+
+
 [tool.ruff]
 line-length = 150
 extend-exclude = ["vendor"]
+target-version = "py39"
 
 [tool.ruff.lint]
 select = [
@@ -21,3 +50,12 @@ ignore = [
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+
+
+[tool.pytest.ini_options]
+testpaths = "tests"
+log_cli = true
+log_cli_level = "DEBUG"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"

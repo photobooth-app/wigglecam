@@ -3,5 +3,8 @@
   "editor.defaultFormatter": "charliermarsh.ruff",
   "[python]": {
     "editor.defaultFormatter": "charliermarsh.ruff"
-  }
+  },
+  "python.testing.pytestArgs": ["--basetemp=./tests_tmp/", "./tests"],
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestEnabled": true
 }
