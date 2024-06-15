@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -9,7 +10,10 @@ import numpy as np
 from numpy.typing import NDArray
 from PIL import Image
 
-from .pipeline import Context, NextStep
+from .context import WiggleProcessorContext
+from .pipeline import NextStep
+
+logger = logging.getLogger(__name__)
 
 register_algorithm_literal = Literal["featurebased", "transformecc"]
 
@@ -31,17 +35,17 @@ class RegisterStep:
         self.crop_to_least_common_intersection = crop_to_least_common_intersection
         self.register_algorithm = register_algorithm
 
-    def __call__(self, context: Context, next_step: NextStep) -> None:
+    def __call__(self, context: WiggleProcessorContext, next_step: NextStep) -> None:
         # validity
-        if len(context.workset_images) != 2:
+        if len(context.processing_paths) != 2:
             raise NotImplementedError("currently only 2 input images supported")
 
         # init
         output_frames: list[RegisteredFrame] = []
-        output_workset_images = []
+        updated_paths: list[Path] = []
 
         # process [0] index frame as reference frame
-        frame_reference = np.asarray(Image.open(context.workset_images[0]))  # reference image
+        frame_reference = np.asarray(Image.open(context.processing_paths[0]))  # reference image
         output_frames.append(RegisteredFrame(frame_reference, self.corners_of_image(frame_reference.shape)))  # ref frame always full shape as corners
 
         # mask to apply or not? mask is referring to reference always
@@ -52,8 +56,8 @@ class RegisterStep:
             # Image.fromarray(mask).save(Path(tmp_path, f"{wiggleset[0].stem}_mask.jpg"))
 
         # register and apply warp matrix to image, calculate frame_corners and store to dataclass
-        for workset_image in context.workset_images[1:]:
-            frame_align = np.asarray(Image.open(workset_image))
+        for processing_path in context.processing_paths[1:]:
+            frame_align = np.asarray(Image.open(processing_path))
             if self.register_algorithm == "featurebased":
                 frame_aligned, warp_matrix = self.featurebased(frame_align, frame_reference, mask=mask)
             elif self.register_algorithm == "transformecc":
@@ -87,18 +91,17 @@ class RegisterStep:
             w_even = (w - 1) if (x - w) % 2 else w
 
             # store cropped to disk.
-            for index, workset_image in enumerate(context.workset_images):
-                registered_image = Path(context.temp_working_dir, f"registered_{index:08}{workset_image.suffix}")
+            for index, processing_path in enumerate(context.processing_paths):
+                registered_image = Path(context.temp_working_dir, f"registered_{index:08}{processing_path.suffix}")
                 Image.fromarray(output_frames[index].frame[y:h_even, x:w_even]).save(registered_image)
-                output_workset_images.append(registered_image)
+                updated_paths.append(registered_image)
         else:
             # TODO:
-            pass
+            raise NotImplementedError("sorry, not implemented yet!")
 
-        context.workset_images = output_workset_images
+        logger.info(f"memory used to store images: {round(sum(x.frame.nbytes for x in output_frames)/1024**2,1)}mb")
 
-        print(f"memory used to store images: {round(sum(x.frame.nbytes for x in output_frames)/1024**2,1)}mb")  # TODO: supervise it's not too big...
-
+        context.processing_paths = updated_paths
         next_step(context)
 
     def __repr__(self) -> str:
@@ -115,7 +118,7 @@ class RegisterStep:
         Returns:
             cv2.typing.MatLike: _description_
         """
-        mask_ratio_to_shape = 0.3
+        mask_ratio_to_shape = 0.5
 
         mask = np.zeros(image_shape[:2], dtype="uint8")  # shape[h,w,colors]
         cv2.circle(mask, (int(mask.shape[1] / 2), int(mask.shape[0] / 2)), int(min(mask.shape[0:2]) * mask_ratio_to_shape / 2), 255, -1)
@@ -297,10 +300,7 @@ class RegisterStep:
             borderMode=cv2.BORDER_CONSTANT,
             borderValue=0,
         )
-        # print(image1_reference_gray.shape)
-        # print(image0_align.shape)
-        # print(image0_aligned.shape)
-        # print(warp_matrix)
+
         return image0_aligned, warp_matrix
 
     # https://stackoverflow.com/questions/62495112/aligning-and-cropping-same-scene-images

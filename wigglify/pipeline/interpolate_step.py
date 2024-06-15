@@ -5,7 +5,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from .pipeline import Context, NextStep
+from .context import WiggleProcessorContext
+from .pipeline import NextStep
 
 logger = logging.getLogger(__name__)
 
@@ -18,30 +19,28 @@ class InterpolateRifeStep:
     def __init__(self, passes: int = 1) -> None:
         self.passes = passes
 
-    def __call__(self, context: Context, next_step: NextStep) -> None:
-        # def rife_ncnnvulkan(images: list[Path], images_out: Path, passes: int = 1) -> list[Path]:
-        out_images: list[Path] = context.workset_images.copy()
+    def __call__(self, context: WiggleProcessorContext, next_step: NextStep) -> None:
+        updated_paths: list[Path] = context.processing_paths.copy()
 
         for pass_ in range(self.passes):
             # on start of each outer loop update process_images to latest out_images, so .insert will update process_images while output remains constant
-            process_images = out_images.copy()
+            process_images = updated_paths.copy()
 
-            for step in range(0, len(out_images) - 1):
+            for step in range(0, len(updated_paths) - 1):
                 logger.debug(f"pass {pass_=}, {step=}")
 
                 interpolated_frame_path = Path(
                     context.temp_working_dir,
-                    context.workset_images[0]
-                    .with_name(f"{context.workset_images[0].stem}_pass{pass_}step{step}{context.workset_images[0].suffix}")
+                    context.processing_paths[0]
+                    .with_name(f"{context.processing_paths[0].stem}_pass{pass_}step{step}{context.processing_paths[0].suffix}")
                     .name,
                 )
                 self.interpolate(process_images[step : step + 2], interpolated_frame_path)
-                out_images.insert(2 * step + 1, interpolated_frame_path)
+                updated_paths.insert(2 * step + 1, interpolated_frame_path)
 
-        logger.info(out_images)
+        logger.info(updated_paths)
 
-        context.workset_images = out_images
-
+        context.processing_paths = updated_paths
         next_step(context)
 
     def __repr__(self) -> str:
@@ -68,7 +67,7 @@ class InterpolateRifeStep:
         ]
 
         interpolate_command = [PATH_RIFE_NCNN_VULKAN_EXECUTABLE] + command_input_images + command_output_path + command_options
-        print(" ".join(interpolate_command))
+        logger.debug(" ".join(interpolate_command))
 
         subprocess.run(args=interpolate_command, check=True)
 
@@ -77,24 +76,26 @@ class InterpolateFfmpegStep:
     def __init__(self, passes: int = 1) -> None:
         self.passes = passes
 
-    def __call__(self, context: Context, next_step: NextStep) -> None:
+    def __call__(self, context: WiggleProcessorContext, next_step: NextStep) -> None:
         # https://stackoverflow.com/questions/63152626/is-it-good-to-use-minterpolate-in-ffmpeg-for-reducing-blurred-frames
         # https://ffmpeg.org/ffmpeg-filters.html#minterpolate
         # ffmpeg -y -r 0.3 -stream_loop 1 -i test02_01.png -r 0.3 -stream_loop 2 -i test02_02.png -filter_complex "[0][1]concat=n=2:v=1:a=0[v];[v]minterpolate=fps=24:scd=none,trim=3:7,setpts=PTS-STARTPTS" -pix_fmt yuv420p test02.mp4
         # ffmpeg  -i %02d.png -framerate 10 -vf minterpolate=fps=20:mi_mode=mci test-%02d.png
-        base_filename = "ffmpeg_tmp_"
+        base_filename = "ffmpeg_interpolate_"
+        filename_extension = context.processing_paths[0].suffix  # derive file format from first in list
 
-        images = context.workset_images
-
+        images: list[Path] = context.processing_paths.copy()
+        logger.warn(images)
         if len(images) < 3:
-            print("info: ffmpeg minterpolate needs three frames, so duplicating the last image")
+            logger.debug("info: ffmpeg minterpolate needs three frames, so feeding the last image twice")
             images.append(images[-1])
 
         if self.passes < 1:
             raise RuntimeError("minimum 1 pass to interpolate")
 
         for index, image in enumerate(images):
-            shutil.copy(image, image.with_name(f"{base_filename}{index:08}{image.suffix}"))
+            interpolate_path = Path(context.temp_working_dir, f"{base_filename}{index:08}{image.suffix}")
+            shutil.copy(image, interpolate_path)
 
         command_general_options = [
             "-hide_banner",
@@ -104,7 +105,7 @@ class InterpolateFfmpegStep:
             "-framerate",
             "1",
             "-i",
-            str(Path(context.temp_working_dir, f"{base_filename}%08d{image.suffix}")),
+            str(Path(context.temp_working_dir, f"{base_filename}%08d{filename_extension}")),
         ]
         command_video_output = [
             "-filter:v",
@@ -112,12 +113,16 @@ class InterpolateFfmpegStep:
         ]
 
         ffmpeg_command = (
-            ["ffmpeg"] + command_general_options + command_video_input + command_video_output + [str(Path(context.temp_working_dir, "out-%08d.png"))]
+            ["ffmpeg"]
+            + command_general_options
+            + command_video_input
+            + command_video_output
+            + [str(Path(context.temp_working_dir, "ffmpeg_interpolated-%08d.png"))]
         )
-        print(" ".join(ffmpeg_command))
+        logger.debug(" ".join(ffmpeg_command))
         subprocess.run(args=ffmpeg_command, check=True)
 
-        context.workset_images = self.get_outputfiles(context.temp_working_dir, "out-*")
+        context.processing_paths = self.get_outputfiles(context.temp_working_dir, "ffmpeg_interpolated-*")
 
         next_step(context)
 

@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import logging
 import shutil
 from pathlib import Path
 
-from .pipeline import Context, NextStep
+from .context import WiggleProcessorContext
+from .pipeline import NextStep
+
+logger = logging.getLogger(__name__)
 
 
 class InputPrepareStep:
@@ -11,16 +15,18 @@ class InputPrepareStep:
         # no parameters for step currently.
         pass
 
-    def __call__(self, context: Context, next_step: NextStep) -> None:
-        print("copy input files to the folder using generic filename input_xxxxxxxx.suffix")
+    def __call__(self, context: WiggleProcessorContext, next_step: NextStep) -> None:
+        logger.debug("copy input files to tmp workdir")
+        updated_paths: list[Path] = []
 
-        for index, input_image in enumerate(context.input_images):
-            workset_image = Path(context.temp_working_dir, f"input_{index:08}{input_image.suffix}")
-            print(f"copy input file {input_image} to {workset_image}")
+        for index, processing_path in enumerate(context.processing_paths):
+            inputd_path = Path(context.temp_working_dir, f"input_{index:08}{processing_path.suffix}")
+            logger.debug(f"copy input file {processing_path} to {inputd_path}")
 
-            shutil.copy(input_image, workset_image)
-            context.workset_images.append(workset_image)
+            shutil.copy(processing_path, inputd_path)
+            updated_paths.append(inputd_path)
 
+        context.processing_paths = updated_paths
         next_step(context)
 
     def __repr__(self) -> str:

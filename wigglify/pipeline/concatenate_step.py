@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import logging
 import shutil
 import subprocess
 from pathlib import Path
 
 from PIL import Image
 
-from .pipeline import Context, NextStep
+from .context import WiggleProcessorContext
+from .pipeline import NextStep
+
+logger = logging.getLogger(__name__)
 
 
 class ConcatenateStep:
@@ -24,15 +28,16 @@ class ConcatenateStep:
         self.mp4_compat_mode = mp4_compat_mode
         self.gif_highquality_mode = gif_highquality_mode
 
-    def __call__(self, context: Context, next_step: NextStep) -> None:
+    def __call__(self, context: WiggleProcessorContext, next_step: NextStep) -> None:
         # https://stackoverflow.com/questions/63152626/is-it-good-to-use-minterpolate-in-ffmpeg-for-reducing-blurred-frames
         # https://ffmpeg.org/ffmpeg-filters.html#minterpolate
         # ffmpeg -y -r 0.3 -stream_loop 1 -i test02_01.png -r 0.3 -stream_loop 2 -i test02_02.png -filter_complex "[0][1]concat=n=2:v=1:a=0[v];[v]minterpolate=fps=24:scd=none,trim=3:7,setpts=PTS-STARTPTS" -pix_fmt yuv420p test02.mp4
         # ffmpeg  -i %02d.png -framerate 10 -vf minterpolate=fps=20:mi_mode=mci test-%02d.png
         base_filename = "ffmpeg_concat_"
-        output_path = Path(context.temp_working_dir, self.video_out)
+        filename_extension = context.processing_paths[0].suffix  # derive file format from first in list
+        output_path = Path(self.video_out)
 
-        if any(dim % 2 for dim in Image.open(context.workset_images[0]).size):
+        if any(dim % 2 for dim in Image.open(context.processing_paths[0]).size):
             # height odd, checking only for one image because it's assumed every image is same shape
             raise RuntimeError("Error, processing restricted to image width/height even")
 
@@ -42,21 +47,19 @@ class ConcatenateStep:
         nominal_duration = nominal_number_of_frames * nominal_frame_delay  # 0.6sec
 
         # if more images are interpolated, the resulting video looks smoother. The user can adjust the speed by choosing different factor.
-        number_of_frames = len(context.workset_images)
+        number_of_frames = len(context.processing_paths)
         resulting_duration = nominal_duration / self.speed_factor  # factor=2 twice as fast, factor=0.5 half as fast, double duration
         resulting_fps = float(number_of_frames) / resulting_duration
 
-        print(resulting_duration, resulting_fps, number_of_frames)
-
         if resulting_fps < 1:
-            print("warning, FPS calculated to less than 1, forcing 1.")
+            logger.warning("warning, FPS calculated to less than 1, forcing 1.")
             resulting_fps = 1
 
-        print(resulting_fps)
+        logger.info(f"Calculated {resulting_duration=}, {resulting_fps=}, {number_of_frames=}")
 
-        # with tempfile.TemporaryDirectory() as tmpdirname:
-        for index, image in enumerate(context.workset_images):
-            shutil.copy(image, image.with_name(f"{base_filename}{index:08}{image.suffix}"))
+        for index, processing_path in enumerate(context.processing_paths):
+            concatenate_path = Path(context.temp_working_dir, f"{base_filename}{index:08}{processing_path.suffix}")
+            shutil.copy(processing_path, concatenate_path)
 
         command_general_options = [
             "-hide_banner",
@@ -66,7 +69,7 @@ class ConcatenateStep:
             "-framerate",
             f"{resulting_fps:.2f}",
             "-i",
-            str(Path(context.temp_working_dir, f"{base_filename}%08d{image.suffix}")),
+            str(Path(context.temp_working_dir, f"{base_filename}%08d{filename_extension}")),  # only all files same format supported!
         ]
 
         command_video_output = []
@@ -84,7 +87,7 @@ class ConcatenateStep:
 
         ffmpeg_command = ["ffmpeg"] + command_general_options + command_video_input + command_video_output + [str(output_path)]
 
-        print(" ".join(ffmpeg_command))
+        logger.debug(" ".join(ffmpeg_command))
 
         subprocess.run(
             args=ffmpeg_command,
@@ -94,7 +97,7 @@ class ConcatenateStep:
         if not output_path.exists():
             raise RuntimeError("error, output file was not created. check logs!")
 
-        context.output_path = output_path
+        context.processing_paths = [output_path]  # keep it a list for consistency
 
         next_step(context)
 
