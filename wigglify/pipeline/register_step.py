@@ -282,8 +282,8 @@ class RegisterStep:
 
         # Find homography/affine transform (includes rotation)
 
-        # warp_matrix, _inliers = cv2.estimateAffinePartial2D(points0, points1)  # , cv2.RANSAC)  # translation and rotation
-        warp_matrix, _inliers = cv2.estimateAffine2D(points0, points1)  # , cv2.RANSAC) # translation only (TODO: verify)
+        warp_matrix, _inliers = cv2.estimateAffinePartial2D(points0, points1)  # , cv2.RANSAC)  # translation and rotation
+        # warp_matrix, _inliers = cv2.estimateAffine2D(points0, points1)  # , cv2.RANSAC) # this is sure wrong, it shears images.
         if warp_matrix is None:
             raise RuntimeError("cannot find transformation!")
 
