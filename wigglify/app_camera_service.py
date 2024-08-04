@@ -2,9 +2,11 @@ import logging
 import time
 from datetime import datetime
 
+import cv2
 import libcamera
+import psutil
 from gpiozero import Button as ZeroButton
-from picamera2 import Picamera2, Preview
+from picamera2 import MappedArray, Picamera2, Preview
 
 fmt = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
 log_formatter = logging.Formatter(fmt=fmt)
@@ -21,6 +23,46 @@ logger = logging.getLogger(__name__)
 
 
 FPS_NOMINAL = 10
+
+tuning = Picamera2.load_tuning_file("imx708.json")
+algo = Picamera2.find_tuning_algo(tuning, "rpi.agc")
+shutter = [100, 3000, 8000, 10000, 120000]
+gain = [1.0, 6.0, 14.0, 15.0, 16.0]
+if "channels" in algo:
+    algo["channels"][0]["exposure_modes"]["short"] = {"shutter": shutter, "gain": gain}
+else:
+    algo["exposure_modes"]["short"] = {"shutter": shutter, "gain": gain}
+
+
+def _pre_callback_overlay(request):
+    metadata = request.get_metadata()
+    overlay1 = f"lensPos: {round(metadata['LensPosition'],1)}"
+    overlay2 = ""
+    overlay3 = f"Exposure: {round(metadata['ExposureTime']/1000,1)}ms, 1/{int(1/(metadata['ExposureTime']/1000/1000))}s, resulting max fps: {round(1/metadata['ExposureTime']*1000*1000,1)}"
+    overlay4 = f"Lux: {round(metadata['Lux'],1)}"
+    overlay5 = f"Ae locked: {metadata['AeLocked']}, again {round(metadata['AnalogueGain'],1)}, dgain {round(metadata['DigitalGain'],1)}"
+    overlay6 = f"Colour Temp: {metadata['ColourTemperature']}"
+    overlay7 = f"cpu: 1/5/15min {[round(x / psutil.cpu_count() * 100,1) for x in psutil.getloadavg()]}%"
+    colour = (210, 210, 210)
+    origin1 = (30, 200)
+    origin2 = (30, 230)
+    origin3 = (30, 260)
+    origin4 = (30, 290)
+    origin5 = (30, 320)
+    origin6 = (30, 350)
+    origin7 = (30, 380)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    scale = 1
+    thickness = 2
+
+    with MappedArray(request, "lores") as m:
+        cv2.putText(m.array, overlay1, origin1, font, scale, colour, thickness)
+        cv2.putText(m.array, overlay2, origin2, font, scale, colour, thickness)
+        cv2.putText(m.array, overlay3, origin3, font, scale, colour, thickness)
+        cv2.putText(m.array, overlay4, origin4, font, scale, colour, thickness)
+        cv2.putText(m.array, overlay5, origin5, font, scale, colour, thickness)
+        cv2.putText(m.array, overlay6, origin6, font, scale, colour, thickness)
+        cv2.putText(m.array, overlay7, origin7, font, scale, colour, thickness)
 
 
 def P_controller(Kp: float = 0.05, setpoint: float = 0, measurement: float = 0, output_limits=(-10000, 10000)):
@@ -57,7 +99,7 @@ if len(Picamera2.global_camera_info()) <= 1:
     quit()
 
 # Primary (leads)
-picam2a = Picamera2(0)
+picam2a = Picamera2(0, tuning=tuning)
 # modea = picam2a.sensor_modes[-1]
 # print(modea)
 picam2a.start_preview(Preview.QTGL, x=0, y=0, width=800, height=400)
@@ -71,9 +113,10 @@ picam2a.configure(config2a)
 picam2a.set_controls({"AfMode": libcamera.controls.AfModeEnum.Continuous})
 picam2a.set_controls({"AfSpeed": libcamera.controls.AfSpeedEnum.Fast})
 picam2a.set_controls({"AfRange": libcamera.controls.AfRangeEnum.Full})
+picam2a.set_controls({"AeExposureMode": libcamera.controls.AeExposureModeEnum.Short})
 
 # Secondary (follows)
-picam2b = Picamera2(1)
+picam2b = Picamera2(1, tuning=tuning)
 # modeb = picam2b.sensor_modes[-1]
 # need buffer_count > 1 because if a frame is skipped, there will be a jump in SensorTimestamp due to dropped frame which messes with the control
 config2b = picam2b.create_still_configuration(main={"size": (4608, 2592)}, controls={"FrameRate": FPS_NOMINAL}, buffer_count=3)
@@ -82,6 +125,7 @@ picam2b.configure(config2b)
 picam2b.set_controls({"AfMode": libcamera.controls.AfModeEnum.Continuous})
 picam2b.set_controls({"AfSpeed": libcamera.controls.AfSpeedEnum.Fast})
 picam2b.set_controls({"AfRange": libcamera.controls.AfRangeEnum.Full})
+picam2b.set_controls({"AeExposureMode": libcamera.controls.AeExposureModeEnum.Short})
 
 
 def on_button_press():
@@ -126,6 +170,8 @@ trigger_btn.when_activated = on_button_press
 
 picam2a.start()
 picam2b.start()
+
+picam2a.pre_callback = _pre_callback_overlay
 
 print("Press Ctrl+C to exit")
 try:
