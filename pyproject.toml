@@ -4,7 +4,7 @@ name = "photobooth-wigglecam"
 version = "0.1.0"
 description = "Default template for PDM package"
 authors = [
-    {name = "michael", email = "me@mgrl.de"},
+    {name = "michael", email = "me@mgineer85.de"},
 ]
 requires-python = ">=3.10,<3.14"
 
@@ -24,6 +24,8 @@ lint = ["ruff>=0.1.8"]
 
 [project.scripts]
 wigglify = "wigglify.cli:main"
+wigglecam_main = "wigglecam.primary"
+wigglecam_sub = "wigglecam.secondary"
 
 [tool.pdm.scripts]
 test = "pytest --basetemp=./tests_tmp/ -v ./tests"
