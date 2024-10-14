@@ -58,14 +58,30 @@ class RegisterStep:
         # register and apply warp matrix to image, calculate frame_corners and store to dataclass
         for processing_path in context.processing_paths[1:]:
             frame_align = np.asarray(Image.open(processing_path))
-            if self.register_algorithm == "featurebased":
-                frame_aligned, warp_matrix = self.featurebased(frame_align, frame_reference, mask=mask)
-            elif self.register_algorithm == "transformecc":
-                frame_aligned, warp_matrix = self.transformecc(frame_align, frame_reference, mask=mask)
-            else:
-                raise ValueError(f"illegal algorithm chosen: {self.register_algorithm}")
 
-            frame_corners = self.corners_of_transformed_image(frame_aligned.shape, warp_matrix)
+            try:
+                if self.register_algorithm == "featurebased":
+                    warp_matrix = self.featurebased(frame_align, frame_reference, mask=mask)
+                elif self.register_algorithm == "transformecc":
+                    warp_matrix = self.transformecc(frame_align, frame_reference, mask=mask)
+                else:
+                    raise ValueError(f"illegal algorithm chosen: {self.register_algorithm}")
+            except Exception as exc:
+                raise RuntimeError(f"could not register images, error {exc} at file {processing_path}") from exc
+            print(warp_matrix)
+            (tx, ty) = warp_matrix[:, 2]
+            translate_warp_matrix = np.float32([[1.0, 0.0, tx], [0.0, 1.0, ty]])
+            print(translate_warp_matrix)
+            frame_aligned: cv2.typing.MatLike = cv2.warpAffine(
+                frame_align,
+                translate_warp_matrix,
+                (frame_align.shape[1], frame_align.shape[0]),
+                flags=cv2.INTER_LINEAR,  # add  + cv2.WARP_INVERSE_MAP, findTransformECC input is changed
+                borderMode=cv2.BORDER_CONSTANT,
+                borderValue=0,
+            )
+
+            frame_corners = self.corners_of_transformed_image(frame_aligned.shape, translate_warp_matrix)
 
             output_frames.append(RegisteredFrame(frame_aligned, frame_corners))
 
@@ -283,7 +299,6 @@ class RegisterStep:
         # Find homography/affine transform (includes rotation)
 
         warp_matrix, _inliers = cv2.estimateAffinePartial2D(points0, points1)  # , cv2.RANSAC)  # translation and rotation
-        # warp_matrix, _inliers = cv2.estimateAffine2D(points0, points1)  # , cv2.RANSAC) # this is sure wrong, it shears images.
         if warp_matrix is None:
             raise RuntimeError("cannot find transformation!")
 
@@ -291,17 +306,7 @@ class RegisterStep:
         transform_scale_up = np.float32([[1.0, 1.0, 1.0 / resize_factor], [1.0, 1.0, 1.0 / resize_factor]])
         warp_matrix = transform_scale_up * warp_matrix
 
-        # Warp image 0 to align with image 1
-        image0_aligned = cv2.warpAffine(
-            image0_align,
-            warp_matrix,
-            (image1_reference_gray.shape[1], image1_reference_gray.shape[0]),
-            flags=cv2.INTER_LINEAR,  # add  + cv2.WARP_INVERSE_MAP, findTransformECC input is changed
-            borderMode=cv2.BORDER_CONSTANT,
-            borderValue=0,
-        )
-
-        return image0_aligned, warp_matrix
+        return warp_matrix
 
     # https://stackoverflow.com/questions/62495112/aligning-and-cropping-same-scene-images
 
@@ -367,14 +372,4 @@ class RegisterStep:
         # maybe improve later: https://stackoverflow.com/questions/65613169/how-to-use-findtransformecc-and-warpaffine-on-resized-image
         warp_matrix = transform_scale_up * warp_matrix
 
-        # use warpAffine() for: translation, euclidean and affine models, homography is not supported by this implementation
-        image0_aligned: cv2.typing.MatLike = cv2.warpAffine(
-            image0_align,
-            warp_matrix,
-            (image0_align.shape[1], image0_align.shape[0]),
-            flags=cv2.INTER_LINEAR,  # add  + cv2.WARP_INVERSE_MAP, findTransformECC input is changed
-            borderMode=cv2.BORDER_CONSTANT,
-            borderValue=0,
-        )
-
-        return image0_aligned, warp_matrix
+        return warp_matrix
