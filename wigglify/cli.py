@@ -31,7 +31,7 @@ def process(input_paths, output_path, resize, no_reverse, passes):
     def _error_handler(error: Exception, context: WiggleProcessorContext, next_step: NextStep) -> None:
         traceback.print_exception(error)
         print(f"Error applying step, error: {error}")
-        quit()
+        raise error
 
     # run pipeline
     tms = time.time()
@@ -58,6 +58,22 @@ def process_interpolate(args):
     process(input_paths, output_path, args.resize, args.no_reverse, args.passes)
 
 
+def process_batch(args):
+    print("processing batch")
+    print(args)
+    wigglesets = input_wigglesets(args.input_match)
+    # print(wigglesets)
+    for wiggleset in wigglesets:
+        print(f"processing wiggleset sequence {wiggleset[0]}")
+        try:
+            process(wiggleset, Path(f"{wiggleset[0].stem}.{args.output_type}"), args.resize, args.no_reverse, args.passes)
+        except Exception as exc:
+            print(f"Error processing wiggleset {wiggleset}, error {exc}")
+            continue
+        else:
+            print("finished processing wiggle")
+
+
 def input_wigglesets(user_input_pattern: str):
     wigglesets: list[list[Path]] = []
 
@@ -81,15 +97,6 @@ def input_wigglesets(user_input_pattern: str):
         wigglesets.append(wiggleset)
 
     return wigglesets
-
-
-def process_batch(args):
-    print("processing batch")
-    print(args)
-    wigglesets = input_wigglesets(args.input_match)
-    print(wigglesets)
-    for wiggleset in wigglesets:
-        process(wiggleset, Path(f"{wiggleset[0].stem}.{args.output_type}"), args.resize, args.no_reverse, args.passes)
 
 
 def main():
