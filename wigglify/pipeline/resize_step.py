@@ -23,8 +23,8 @@ class ResizeStep:
             logger.info(f"resizing image {processing_path}, storing in {resized_path}")
 
             image = Image.open(processing_path)
-            image.thumbnail(self.max_size)  # TODO, check quality parameters and speed.
-            image.save(resized_path)  # TODO: check quality parameters
+            image.thumbnail(self.max_size, resample=Image.Resampling.LANCZOS)
+            image.save(resized_path)
             # image.show()
             updated_paths.append(resized_path)
 
