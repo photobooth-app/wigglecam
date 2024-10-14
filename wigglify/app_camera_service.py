@@ -26,8 +26,8 @@ FPS_NOMINAL = 10
 
 tuning = Picamera2.load_tuning_file("imx708.json")
 algo = Picamera2.find_tuning_algo(tuning, "rpi.agc")
-shutter = [100, 3000, 8000, 10000, 120000]
-gain = [1.0, 6.0, 14.0, 15.0, 16.0]
+shutter = [100, 1000, 2000, 4000, 8000, 16000, 120000]
+gain = [1.0, 1.0, 2.0, 4.0, 8.0, 14.0, 14.0]
 if "channels" in algo:
     algo["channels"][0]["exposure_modes"]["short"] = {"shutter": shutter, "gain": gain}
 else:
@@ -43,7 +43,7 @@ def _pre_callback_overlay(request):
     overlay5 = f"Ae locked: {metadata['AeLocked']}, again {round(metadata['AnalogueGain'],1)}, dgain {round(metadata['DigitalGain'],1)}"
     overlay6 = f"Colour Temp: {metadata['ColourTemperature']}"
     overlay7 = f"cpu: 1/5/15min {[round(x / psutil.cpu_count() * 100,1) for x in psutil.getloadavg()]}%"
-    colour = (210, 210, 210)
+    colour = (125, 125, 125)
     origin1 = (30, 200)
     origin2 = (30, 230)
     origin3 = (30, 260)
