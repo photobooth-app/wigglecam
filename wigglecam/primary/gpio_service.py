@@ -1,4 +1,7 @@
 import logging
+import os
+import time
+from pathlib import Path
 
 from gpiozero import Button as ZeroButton
 from gpiozero import DigitalOutputDevice, PWMOutputDevice
@@ -23,27 +26,40 @@ class Button(ZeroButton):
 class PrimaryGpioService:
     def __init__(self, config: dict):
         self._config: dict = {
-            "chip": "/dev/gpiochip0",
-            "clock_out_pin_name": "GPIO27",
-            "trigger_out_pin_name": "GPIO22",
-            "ext_trigger_in_pin_name": "GPIO17",
+            # "chip": "/dev/gpiochip0",
+            "clock_out_pin_name": "GPIO18",
+            "trigger_out_pin_name": "GPIO17",
+            "ext_trigger_in_pin_name": "GPIO4",
             "FPS_NOMINAL": 10,
         }  # TODO: pydantic config?
 
         # private props
-        self._clock_out = None
-        self._trigger_out = None
-        self._ext_trigger_in = None
+        self._clock_out: PWMOutputDevice = None
+        self._trigger_out: DigitalOutputDevice = None
+        self._ext_trigger_in: Button = None
 
     def start(self):
-        self._clock_out = PWMOutputDevice(pin=self._config["clock_out_pin_name"], initial_value=0, frequency=self._config["FPS_NOMINAL"])
-        self._clock_out.value = 0.5
+        if True:
+            # hardware pwm is preferred
+            self.set_hardware_clock(enable=True)
+            print("generating clock using hardware pwm overlay")
+
+        else:
+            # alternative is software pwm
+            self._clock_out = PWMOutputDevice(pin=self._config["clock_out_pin_name"], initial_value=0, frequency=self._config["FPS_NOMINAL"])
+            self._clock_out.value = 0.5
+            print(f"generating clock using software pwm on {self._clock_out}, might be jittery, consider to enable hardware pwm")
 
         self._trigger_out = DigitalOutputDevice(pin=self._config["trigger_out_pin_name"], initial_value=0)
+        print(f"forward trigger_out on {self._trigger_out}")
+        # TODO: improve: maybe better to delay output until falling edge of clock comes in,
+        # send pulse and turn off again? avoids maybe race condition when trigger is setup right
+        # around the clock rise?
 
         self._ext_trigger_in = Button(pin=self._config["ext_trigger_in_pin_name"], bounce_time=0.04)
         self._ext_trigger_in.when_pressed = self._trigger_out.on
         self._ext_trigger_in.when_released = self._trigger_out.off
+        print(f"external trigger button on {self._ext_trigger_in}")
 
         logger.debug(f"{self.__module__} started")
 
@@ -51,11 +67,45 @@ class PrimaryGpioService:
         if self._clock_out:
             self._clock_out.close()
 
+        self.set_hardware_clock(enable=False)
+
         if self._trigger_out:
             self._trigger_out.close()
 
         if self._ext_trigger_in:
             self._ext_trigger_in.close()
+
+    def set_hardware_clock(self, enable: bool = True):
+        """
+        Export channel (0)
+        Set the period 1,000,000 ns (1kHz)
+        Set the duty_cycle 50%
+        Enable the PWM signal
+
+        # https://raspberrypi.stackexchange.com/questions/143643/how-can-i-use-dtoverlay-pwm
+        # https://raspberrypi.stackexchange.com/questions/148769/troubleshooting-pwm-via-sysfs/148774#148774
+        # 1/10FPS = 0.1 * 1e6 = 100.000.000ns period
+        # duty cycle = period / 2
+        """
+        PWM_CHANNEL = "0"
+        PERIOD = int(1 / self._config["FPS_NOMINAL"] * 1e9)  # 1e9=ns
+        DUTY_CYCLE = PERIOD // 2
+        PWM_SYSFS = Path("/sys/class/pwm/pwmchip0")
+
+        if not PWM_SYSFS.is_dir():
+            raise RuntimeError("pwm overlay not enabled in config.txt")
+
+        pwm_dir = PWM_SYSFS / f"pwm{PWM_CHANNEL}"
+
+        if not os.access(pwm_dir, os.F_OK):
+            Path(PWM_SYSFS / "export").write_text(f"{PWM_CHANNEL}\n")
+            time.sleep(0.1)
+
+        Path(pwm_dir / "period").write_text(f"{PERIOD}\n")
+        Path(pwm_dir / "duty_cycle").write_text(f"{DUTY_CYCLE}\n")
+        Path(pwm_dir / "enable").write_text(f"{1 if enable else 0}\n")
+
+        print(f"set hw clock sysfs chip {pwm_dir}, period={PERIOD}, duty_cycle={DUTY_CYCLE}, enable={1 if enable else 0}")
 
 
 if __name__ == "__main__":

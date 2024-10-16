@@ -12,16 +12,14 @@ def main():
 
     gpio_service.start()
 
-    print(f"external trigger button on {gpio_service._ext_trigger_in}")
-    print(f"forward trigger_out on {gpio_service._trigger_out}")
-    print(f"generating clock on {gpio_service._clock_out}")
-
     try:
         while True:
             time.sleep(1)
 
     except KeyboardInterrupt:
         print("got Ctrl+C, exiting")
+
+    gpio_service.stop()
 
 
 if __name__ == "__main__":
