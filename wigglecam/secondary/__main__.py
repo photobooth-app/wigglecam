@@ -17,7 +17,7 @@ def main():
     print("Press Ctrl+C to exit")
     print("")
 
-    synced_camera_service.start()
+    synced_camera_service.start()  # other services started by synccamservice
 
     try:
         while True:
@@ -25,6 +25,8 @@ def main():
 
     except KeyboardInterrupt:
         print("got Ctrl+C, exiting")
+
+    synced_camera_service.stop()
 
 
 if __name__ == "__main__":
