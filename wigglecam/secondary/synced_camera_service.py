@@ -57,10 +57,14 @@ class SecondarySyncedCameraService:
         self._camera_service.stop()
         self._gpio_service.stop()
 
+        logger.debug(f"{self.__module__} stopped")
+
     def _sync_fun(self):
         while True:
-            self._camera_service.sync_tick(self._gpio_service.wait_for_clock_signal(timeout=1))
+            timestamp_ns = self._gpio_service.wait_for_clock_signal(timeout=1)
+            self._camera_service.sync_tick(timestamp_ns)
 
     def _capture_fun(self):
         while True:
-            self._camera_service.do_capture(self._gpio_service.wait_for_trigger_signal(timeout=None))
+            self._gpio_service.wait_for_trigger_signal(timeout=None)
+            self._camera_service.do_capture()
