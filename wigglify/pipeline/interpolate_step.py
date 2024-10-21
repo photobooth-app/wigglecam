@@ -23,7 +23,8 @@ class InterpolateRifeStep:
         updated_paths: list[Path] = context.processing_paths.copy()
 
         for pass_ in range(self.passes):
-            # on start of each outer loop update process_images to latest out_images, so .insert will update process_images while output remains constant
+            # on start of each outer loop update process_images to latest out_images,
+            # so .insert will update process_images while output remains constant
             process_images = updated_paths.copy()
 
             for step in range(0, len(updated_paths) - 1):
@@ -79,7 +80,8 @@ class InterpolateFfmpegStep:
     def __call__(self, context: WiggleProcessorContext, next_step: NextStep) -> None:
         # https://stackoverflow.com/questions/63152626/is-it-good-to-use-minterpolate-in-ffmpeg-for-reducing-blurred-frames
         # https://ffmpeg.org/ffmpeg-filters.html#minterpolate
-        # ffmpeg -y -r 0.3 -stream_loop 1 -i test02_01.png -r 0.3 -stream_loop 2 -i test02_02.png -filter_complex "[0][1]concat=n=2:v=1:a=0[v];[v]minterpolate=fps=24:scd=none,trim=3:7,setpts=PTS-STARTPTS" -pix_fmt yuv420p test02.mp4
+        # ffmpeg -y -r 0.3 -stream_loop 1 -i test02_01.png -r 0.3 -stream_loop 2 -i test02_02.png -filter_complex
+        # "[0][1]concat=n=2:v=1:a=0[v];[v]minterpolate=fps=24:scd=none,trim=3:7,setpts=PTS-STARTPTS" -pix_fmt yuv420p test02.mp4
         # ffmpeg  -i %02d.png -framerate 10 -vf minterpolate=fps=20:mi_mode=mci test-%02d.png
         base_filename = "ffmpeg_interpolate_"
         filename_extension = context.processing_paths[0].suffix  # derive file format from first in list
@@ -109,8 +111,8 @@ class InterpolateFfmpegStep:
         ]
         command_video_output = [
             "-filter:v",
-            f"minterpolate=scd=none:fps={((self.passes+1)*2)}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=0:me=epzs",  # *2 for consistency with other algos
-        ]
+            f"minterpolate=scd=none:fps={((self.passes+1)*2)}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=0:me=epzs",
+        ]  # *2 for consistency with other algos
 
         ffmpeg_command = (
             ["ffmpeg"]

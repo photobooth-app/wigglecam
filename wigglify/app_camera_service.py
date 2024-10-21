@@ -38,7 +38,10 @@ def _pre_callback_overlay(request):
     metadata = request.get_metadata()
     overlay1 = f"lensPos: {round(metadata['LensPosition'],1)}"
     overlay2 = ""
-    overlay3 = f"Exposure: {round(metadata['ExposureTime']/1000,1)}ms, 1/{int(1/(metadata['ExposureTime']/1000/1000))}s, resulting max fps: {round(1/metadata['ExposureTime']*1000*1000,1)}"
+    overlay3 = (
+        f"Exposure: {round(metadata['ExposureTime']/1000,1)}ms, 1/{int(1/(metadata['ExposureTime']/1000/1000))}s, "
+        f"resulting max fps: {round(1/metadata['ExposureTime']*1000*1000,1)}"
+    )
     overlay4 = f"Lux: {round(metadata['Lux'],1)}"
     overlay5 = f"Ae locked: {metadata['AeLocked']}, again {round(metadata['AnalogueGain'],1)}, dgain {round(metadata['DigitalGain'],1)}"
     overlay6 = f"Colour Temp: {metadata['ColourTemperature']}"

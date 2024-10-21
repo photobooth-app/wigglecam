@@ -1,6 +1,6 @@
 from abc import abstractmethod
-from collections.abc import Generator, Iterable
-from typing import Callable, Generic, Protocol, TypeVar, Union
+from collections.abc import Callable, Generator, Iterable
+from typing import Generic, Protocol, TypeVar
 
 # implementation from article:
 # https://github.com/dkraczkowski/dkraczkowski.github.io
@@ -12,7 +12,7 @@ class PipelineError(Exception):
     pass
 
 
-NextStep = Callable[[Context], Iterable[Union[Exception, Context]]]
+NextStep = Callable[[Context], Iterable[Exception | Context]]
 ErrorHandler = Callable[[Exception, Context, NextStep], None]
 
 

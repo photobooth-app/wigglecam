@@ -175,7 +175,10 @@ class Picamera2Service:
                     )
 
                 print(
-                    f"clock_in={round((capture_time_assigned_timestamp_ns or 0)/1e6,1)} ms, sensor_timestamp={round(picam_metadata['SensorTimestamp']/1e6,1)} ms, delta={round((timestamp_delta or 0)/1e6,1)} ms, adjust_amount={round(adjust_amount/1e3,1)} ms"
+                    f"clock_in={round((capture_time_assigned_timestamp_ns or 0)/1e6,1)} ms, "
+                    f"sensor_timestamp={round(picam_metadata['SensorTimestamp']/1e6,1)} ms, "
+                    f"delta={round((timestamp_delta or 0)/1e6,1)} ms, "
+                    f"adjust_amount={round(adjust_amount/1e3,1)} ms"
                 )
 
         print("_camera_fun left")
