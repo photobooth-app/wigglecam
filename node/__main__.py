@@ -36,7 +36,7 @@ def main():
     except KeyboardInterrupt:
         print("got Ctrl+C, exiting")
 
-    # TODO: later: container stop
+    # TODO: later: container stop, also needs to be handled properly by QT possibly?
     synced_camera_service.stop()
     gpio_secondary_service.stop()
     if appconfig.primary_gpio.enable_primary_gpio:

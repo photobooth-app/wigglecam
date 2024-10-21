@@ -43,11 +43,13 @@ class GpioPrimaryService:
         self.set_hardware_clock(enable=True)
         print("generating clock using hardware pwm overlay")
 
-        self._trigger_out = DigitalOutputDevice(pin=self._config.trigger_out_pin_name, initial_value=0)
+        self._trigger_out = DigitalOutputDevice(pin=self._config.trigger_out_pin_name, initial_value=False, active_high=True)
         print(f"forward trigger_out on {self._trigger_out}")
-        # TODO: improve: maybe better to delay output until falling edge of clock comes in,
+        # TODO: 1)improve: maybe better to delay output until falling edge of clock comes in,
         # send pulse and turn off again? avoids maybe race condition when trigger is setup right
         # around the clock rise?
+        # TODO: 2) during above command the output glitches to high for short period and slave node detects a capture request :(
+        # maybe switch to gpiod for this gpio service also, just need a proper function to debounce the button then.
 
         self._ext_trigger_in = Button(pin=self._config.ext_trigger_in_pin_name, bounce_time=0.04)
         self._ext_trigger_in.when_pressed = self._trigger_out.on

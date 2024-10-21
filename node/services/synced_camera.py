@@ -61,4 +61,7 @@ class SyncedCameraService:
     def _capture_fun(self):
         while True:
             self._gpio_service.wait_for_trigger_signal(timeout=None)
-            self._camera_service.do_capture()
+            if self._gpio_service.clock_signal_valid():
+                self._camera_service.do_capture()
+            else:
+                print("capture request ignored because no valid clock signal")

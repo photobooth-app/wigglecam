@@ -40,7 +40,10 @@ class GpioSecondaryService:
         pass
 
     def clock_signal_valid(self) -> bool:
-        return False
+        TIMEOUT_CLOCK_SIGNAL_INVALID = 0.5 * 1e9  # 0.5sec
+        if not self._clock_in_timestamp_ns:
+            return False
+        return (time.monotonic_ns() - self._clock_in_timestamp_ns) > TIMEOUT_CLOCK_SIGNAL_INVALID
 
     def get_nominal_framerate(self) -> int:
         return 10  # TODO: implement derive from clock
