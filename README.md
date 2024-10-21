@@ -18,6 +18,29 @@ Turn stereoscopic images into a wigglegram.
 
 ## Setup
 
+### All systems
+
+```
+    1. Install image (bookworm 64bit, lite) on all systems (rpi imager), connect to wifi
+    2. All hosts have same name, get IP addresses from your router
+    3. Log in each device to set new hostname:
+to identify, invoke some SD activity (like upgrade or something) to identify the board
+        a. Wigglecam-a  --> cam2
+        b. Wigglecam-b --> cam1 (leftmost)
+        c. Wigglecam-c --> cam4 (rightmost)
+        d. Wigglecam-main --> cam3
+(means mapping is not same as hostname numbering)
+    4. Update and upgrade all systems
+    5. Install packages:
+        a. sudo usermod --append --groups gpio $(whoami)
+        b. sudo apt install -y python3-picamera2 python3-opencv
+        c. Sudo apt install python3-pip
+        d. Pip install --break-system-packages pydantic pydantic-settings
+        e. Sudo apt install pipx
+
+
+```
+
 ### Primary Node
 
 #### Prepare Primary Node System
