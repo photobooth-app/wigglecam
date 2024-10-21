@@ -4,8 +4,10 @@ from datetime import datetime
 from pathlib import Path
 from threading import Event, Thread
 
-from libcamera import Transform
-from picamera2 import Picamera2
+from libcamera import Transform, controls
+from picamera2 import Picamera2, Preview
+
+from ..config.models import ConfigPicamera2
 
 logger = logging.getLogger(__name__)
 
@@ -13,29 +15,21 @@ logger = logging.getLogger(__name__)
 ADJUST_EVERY_X_CYCLE = 10
 
 
-class SecondaryCameraService:
-    def __init__(
-        self,
-        config: dict,
-    ):
-        self._config: dict = {
-            "camera_num": 0,
-            "CAPTURE_CAM_RESOLUTION_WIDTH": 4608,
-            "CAPTURE_CAM_RESOLUTION_HEIGHT": 2592,
-            "LIVEVIEW_RESOLUTION_WIDTH": 1000,
-            "LIVEVIEW_RESOLUTION_HEIGHT": 1000,
-            "original_still_quality": 90,
-        }  # TODO: pydantic config?
+class Picamera2Service:
+    def __init__(self, config: ConfigPicamera2):
+        # init with arguments
+        self._config: ConfigPicamera2 = config
 
         # private props
         self._picamera2: Picamera2 = None
         self._timestamp_monotonic_ns = None
         self._nominal_framerate: float = None
         self._adjust_sync_offset: int = 0
-        self._capture: Event = Event()
-
-        # worker threads
+        self._capture: Event = None
         self._camera_thread: Thread = None
+
+        # initialize private props
+        self._capture = Event()
 
         logger.info(f"global_camera_info {Picamera2.global_camera_info()}")
 
@@ -53,14 +47,23 @@ class SecondaryCameraService:
             self._picamera2.close()
             del self._picamera2
 
-        self._picamera2: Picamera2 = Picamera2(camera_num=self._config["camera_num"])
+        self._picamera2: Picamera2 = Picamera2(camera_num=self._config.camera_num)
+
+        if self._config.enable_preview_display:
+            print("starting display preview")
+            # Preview.DRM tested, but leads to many dropped frames.
+            # Preview.QTGL currently not available on Pi3 according to own testing.
+            # Preview.QT seems to work reasonably well, so use this for now hardcoded.
+            # Further refs:
+            # https://github.com/raspberrypi/picamera2/issues/989
+            self._picamera2.start_preview(Preview.QT, x=0, y=0, width=800, height=480)
 
         # config camera
         self._capture_config = self._picamera2.create_still_configuration(
-            main={"size": (self._config["CAPTURE_CAM_RESOLUTION_WIDTH"], self._config["CAPTURE_CAM_RESOLUTION_HEIGHT"])},
-            # lores={"size": (self._config.LIVEVIEW_RESOLUTION_WIDTH, self._config.LIVEVIEW_RESOLUTION_HEIGHT)},
+            main={"size": (self._config.CAPTURE_CAM_RESOLUTION_WIDTH, self._config.CAPTURE_CAM_RESOLUTION_HEIGHT)},
+            lores={"size": (self._config.LIVEVIEW_RESOLUTION_WIDTH, self._config.LIVEVIEW_RESOLUTION_HEIGHT)},
             # encode="lores",
-            # display="lores",
+            display="lores",
             buffer_count=3,
             queue=False,
             controls={"FrameRate": self._nominal_framerate},
@@ -69,10 +72,12 @@ class SecondaryCameraService:
 
         # configure; camera needs to be stopped before
         self._picamera2.configure(self._capture_config)
-        self._picamera2.options["quality"] = self._config["original_still_quality"]  # capture_file image quality
+        self._picamera2.options["quality"] = self._config.original_still_quality  # capture_file image quality
 
         # start camera
         self._picamera2.start()
+
+        self._init_autofocus()
 
         self._camera_thread = Thread(name="_camera_thread", target=self._camera_fun, args=(), daemon=True)
         self._camera_thread.start()
@@ -85,17 +90,35 @@ class SecondaryCameraService:
         logger.debug(f"{self.__module__} started")
 
     def stop(self):
-        # self._picamera2.stop_encoder()
-        self._picamera2.stop()
-        self._picamera2.close()  # need to close camera so it can be used by other processes also (or be started again)
+        if self._picamera2:
+            self._picamera2.stop()
+            self._picamera2.close()  # need to close camera so it can be used by other processes also (or be started again)
 
-        logger.debug(f"{self.__module__} stopped,  {self._camera_thread.is_alive()=}")
+        logger.debug(f"{self.__module__} stopped")
 
     def do_capture(self, number_frames: int = 1):
         self._capture.set()
 
     def sync_tick(self, timestamp_ns: int):
         self._timestamp_monotonic_ns = timestamp_ns
+
+    def _init_autofocus(self):
+        """
+        on start set autofocus to continuous if requested by config or
+        auto and trigger regularly
+        """
+
+        try:
+            self._picamera2.set_controls({"AfMode": controls.AfModeEnum.Continuous})
+        except RuntimeError as exc:
+            logger.critical(f"control not available on camera - autofocus not working properly {exc}")
+
+        try:
+            self._picamera2.set_controls({"AfSpeed": controls.AfSpeedEnum.Fast})
+        except RuntimeError as exc:
+            logger.info(f"control not available on all cameras - can ignore {exc}")
+
+        logger.debug("autofocus set")
 
     def _camera_fun(self):
         print("starting _camera_fun")

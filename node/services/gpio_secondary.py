@@ -4,28 +4,31 @@ from threading import Condition, Thread
 
 import gpiod
 
+from ..config.models import ConfigGpioSecondary
+
 logger = logging.getLogger(__name__)
 
 
-class SecondaryGpioService:
-    def __init__(self, config: dict):
-        self._config: dict = {
-            "chip": "/dev/gpiochip0",
-            "clock_in_pin_name": "GPIO14",
-            "trigger_in_pin_name": "GPIO15",
-        }  # TODO: pydantic config?
+class GpioSecondaryService:
+    def __init__(self, config: ConfigGpioSecondary):
+        # init with arguments
+        self._config: ConfigGpioSecondary = config
 
         # private props
-        self._gpiod_chip = gpiod.Chip(self._config["chip"])
-        self._gpiod_clock_in = gpiod.find_line(self._config["clock_in_pin_name"]).offset()
-        self._gpiod_trigger_in = gpiod.find_line(self._config["trigger_in_pin_name"]).offset()
-
+        self._gpiod_chip = None
+        self._gpiod_clock_in = None
+        self._gpiod_trigger_in = None
+        self._clock_in_condition: Condition = None
+        self._trigger_in_condition: Condition = None
         self._clock_in_timestamp_ns = None
+        self._gpio_thread: Thread = None
+
+        # init private props
+        self._gpiod_chip = gpiod.Chip(self._config.chip)
+        self._gpiod_clock_in = gpiod.find_line(self._config.clock_in_pin_name).offset()
+        self._gpiod_trigger_in = gpiod.find_line(self._config.trigger_in_pin_name).offset()
         self._clock_in_condition: Condition = Condition()
         self._trigger_in_condition: Condition = Condition()
-
-        # worker threads
-        self._gpio_thread: Thread = None
 
     def start(self):
         self._gpio_thread = Thread(name="_gpio_thread", target=self._gpio_fun, args=(), daemon=True)

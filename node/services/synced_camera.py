@@ -1,27 +1,21 @@
 import logging
 from threading import Thread
 
-from .camera_service import SecondaryCameraService
-from .gpio_service import SecondaryGpioService
+from .camera_service import Picamera2Service
+from .gpio_secondary import GpioSecondaryService
 
 logger = logging.getLogger(__name__)
 
 FPS_NOMINAL = 10
 
 
-class SecondarySyncedCameraService:
-    def __init__(
-        self,
-        camera_service: SecondaryCameraService,
-        gpio_service: SecondaryGpioService,
-        config: dict,
-    ):
-        self._config: dict = {}  # TODO: pydantic config?
+class SyncedCameraService:
+    def __init__(self, camera_service: Picamera2Service, gpio_service: GpioSecondaryService):
+        # init the arguments
+        self._camera_service: Picamera2Service = camera_service
+        self._gpio_service: GpioSecondaryService = gpio_service
 
-        self._camera_service: SecondaryCameraService = camera_service
-        self._gpio_service: SecondaryGpioService = gpio_service
-
-        # worker threads
+        # define private props
         self._sync_thread: Thread = None
         self._capture_thread: Thread = None
 

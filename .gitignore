@@ -22,6 +22,7 @@ junit/*
 # build backends
 dist/*
 .pdm-python
+pdm.lock
 
 
 # ignore .DS_Store files in macos

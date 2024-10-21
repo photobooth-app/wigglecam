@@ -6,6 +6,8 @@ from pathlib import Path
 from gpiozero import Button as ZeroButton
 from gpiozero import DigitalOutputDevice, PWMOutputDevice
 
+from ..config.models import ConfigGpioPrimary
+
 logger = logging.getLogger(__name__)
 
 
@@ -23,40 +25,31 @@ class Button(ZeroButton):
             self._fire_events(self.pin_factory.ticks(), False)
 
 
-class PrimaryGpioService:
-    def __init__(self, config: dict):
-        self._config: dict = {
-            # "chip": "/dev/gpiochip0",
-            "clock_out_pin_name": "GPIO18",
-            "trigger_out_pin_name": "GPIO17",
-            "ext_trigger_in_pin_name": "GPIO4",
-            "FPS_NOMINAL": 10,
-        }  # TODO: pydantic config?
+class GpioPrimaryService:
+    def __init__(self, config: ConfigGpioPrimary):
+        # init arguments
+        self._config: ConfigGpioPrimary = config
 
-        # private props
+        # define private props
         self._clock_out: PWMOutputDevice = None
         self._trigger_out: DigitalOutputDevice = None
         self._ext_trigger_in: Button = None
 
+        # init private props
+        pass
+
     def start(self):
-        if True:
-            # hardware pwm is preferred
-            self.set_hardware_clock(enable=True)
-            print("generating clock using hardware pwm overlay")
+        # hardware pwm is preferred
+        self.set_hardware_clock(enable=True)
+        print("generating clock using hardware pwm overlay")
 
-        else:
-            # alternative is software pwm
-            self._clock_out = PWMOutputDevice(pin=self._config["clock_out_pin_name"], initial_value=0, frequency=self._config["FPS_NOMINAL"])
-            self._clock_out.value = 0.5
-            print(f"generating clock using software pwm on {self._clock_out}, might be jittery, consider to enable hardware pwm")
-
-        self._trigger_out = DigitalOutputDevice(pin=self._config["trigger_out_pin_name"], initial_value=0)
+        self._trigger_out = DigitalOutputDevice(pin=self._config.trigger_out_pin_name, initial_value=0)
         print(f"forward trigger_out on {self._trigger_out}")
         # TODO: improve: maybe better to delay output until falling edge of clock comes in,
         # send pulse and turn off again? avoids maybe race condition when trigger is setup right
         # around the clock rise?
 
-        self._ext_trigger_in = Button(pin=self._config["ext_trigger_in_pin_name"], bounce_time=0.04)
+        self._ext_trigger_in = Button(pin=self._config.ext_trigger_in_pin_name, bounce_time=0.04)
         self._ext_trigger_in.when_pressed = self._trigger_out.on
         self._ext_trigger_in.when_released = self._trigger_out.off
         print(f"external trigger button on {self._ext_trigger_in}")
@@ -88,7 +81,7 @@ class PrimaryGpioService:
         # duty cycle = period / 2
         """
         PWM_CHANNEL = "0"
-        PERIOD = int(1 / self._config["FPS_NOMINAL"] * 1e9)  # 1e9=ns
+        PERIOD = int(1 / self._config.FPS_NOMINAL * 1e9)  # 1e9=ns
         DUTY_CYCLE = PERIOD // 2
         PWM_SYSFS = Path("/sys/class/pwm/pwmchip0")
 
