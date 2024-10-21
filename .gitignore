@@ -3,7 +3,8 @@
 /tmp
 /output_images
 /input_images/wiggle_*_*.jpg
-/experimental 
+**/*experimental
+**/old-*
 
 # python files
 __pycache__
