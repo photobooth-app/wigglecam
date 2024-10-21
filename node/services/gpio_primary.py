@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 
 from gpiozero import Button as ZeroButton
-from gpiozero import DigitalOutputDevice, PWMOutputDevice
+from gpiozero import DigitalOutputDevice
 
 from ..config.models import ConfigGpioPrimary
 
@@ -31,7 +31,6 @@ class GpioPrimaryService:
         self._config: ConfigGpioPrimary = config
 
         # define private props
-        self._clock_out: PWMOutputDevice = None
         self._trigger_out: DigitalOutputDevice = None
         self._ext_trigger_in: Button = None
 
@@ -59,9 +58,6 @@ class GpioPrimaryService:
         logger.debug(f"{self.__module__} started")
 
     def stop(self):
-        if self._clock_out:
-            self._clock_out.close()
-
         self.set_hardware_clock(enable=False)
 
         if self._trigger_out:

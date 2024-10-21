@@ -23,17 +23,7 @@ class SyncedCameraService:
         self._gpio_service.start()
 
         print("waiting for clock input, startup of service on halt!")
-        while True:
-            try:
-                if self._gpio_service.wait_for_clock_signal(timeout=2.0):
-                    print("clock signal received, continue...")
-                    break
-            except TimeoutError:
-                print("waiting for clock signal in...")
-            except Exception as e:
-                print(e)
-                print("unexpected error while waiting for sync clock in")
-
+        self._wait_for_clock()
         print("got it, continue starting...")
 
         self._camera_service.start(nominal_framerate=FPS_NOMINAL)
@@ -53,10 +43,26 @@ class SyncedCameraService:
 
         logger.debug(f"{self.__module__} stopped")
 
+    def _wait_for_clock(self):
+        while True:
+            try:
+                if self._gpio_service.wait_for_clock_signal(timeout=2.0):
+                    print("clock signal received, continue...")
+                    break
+            except TimeoutError:
+                print("waiting for clock signal in...")
+            except Exception as e:
+                print(e)
+                print("unexpected error while waiting for sync clock in")
+
     def _sync_fun(self):
         while True:
-            timestamp_ns = self._gpio_service.wait_for_clock_signal(timeout=1)
-            self._camera_service.sync_tick(timestamp_ns)
+            try:
+                timestamp_ns = self._gpio_service.wait_for_clock_signal(timeout=1)
+                self._camera_service.sync_tick(timestamp_ns)
+            except TimeoutError:
+                self._wait_for_clock()
+                # TODO: implement some kind of going to standby and stop also camera to save energy...
 
     def _capture_fun(self):
         while True:
