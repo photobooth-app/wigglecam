@@ -1,6 +1,6 @@
 # Wigglegram Camera
 
-Turn two stereoscopic images into a smooth wigglegram.
+Turn stereoscopic images into a wigglegram.
 
 ![demo wigglegram](./assets/wigglegram-demo1.gif)
 
@@ -11,7 +11,7 @@ Turn two stereoscopic images into a smooth wigglegram.
 
 ## 😍 What it is
 
-🧪 two Raspberry Pi camera modules connected to Raspberry Pi 5
-🧪 Software synchronized cameras, using picamera2
-🧪 3d printed enclosure
-🧪 Creating smooth videos from just two images using frame interpolation AI algorithms
+🧪 Python software to capture wigglegrams using multiple cameras
+🧪 Software synchronized Raspberry Pi camera modules, using picamera2  
+🧪 3d printed enclosure  
+🧪 Creating smooth videos from just two images using frame interpolation AI algorithms  
