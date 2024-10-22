@@ -132,7 +132,7 @@ class Picamera2Service:
                 self._capture.clear()
                 print("####### capture #######")
 
-                filename = Path(f"img_{datetime.now().astimezone().strftime('%Y%m%d-%H%M%S.%f')}")
+                filename = Path(f"img_{datetime.now().astimezone().strftime('%Y%m%d-%H%M%S-%f')}")
                 print(f"filename {filename}")
 
                 if timestamp_delta:
