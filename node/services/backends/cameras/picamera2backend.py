@@ -6,8 +6,11 @@ from threading import Event, Thread
 
 from libcamera import Transform, controls
 from picamera2 import Picamera2, Preview
+from picamera2.encoders import MJPEGEncoder
+from picamera2.outputs import FileOutput
 
-from ..config.models import ConfigPicamera2
+from ....config.models import ConfigPicamera2
+from .backend import BaseBackend, StreamingOutput
 
 logger = logging.getLogger(__name__)
 
@@ -15,8 +18,9 @@ logger = logging.getLogger(__name__)
 ADJUST_EVERY_X_CYCLE = 10
 
 
-class Picamera2Service:
+class Picamera2Backend(BaseBackend):
     def __init__(self, config: ConfigPicamera2):
+        super().__init__()
         # init with arguments
         self._config: ConfigPicamera2 = config
 
@@ -27,14 +31,17 @@ class Picamera2Service:
         self._adjust_sync_offset: int = 0
         self._capture: Event = None
         self._camera_thread: Thread = None
+        self._streaming_output: StreamingOutput = None
 
         # initialize private props
         self._capture = Event()
+        self._streaming_output: StreamingOutput = StreamingOutput()
 
         logger.info(f"global_camera_info {Picamera2.global_camera_info()}")
 
     def start(self, nominal_framerate: int = None):
         """To start the backend, configure picamera2"""
+        super().start()
 
         if not nominal_framerate:
             # if 0 or None, fail!
@@ -54,7 +61,7 @@ class Picamera2Service:
             self._picamera2.create_still_configuration(
                 main={"size": (self._config.CAPTURE_CAM_RESOLUTION_WIDTH, self._config.CAPTURE_CAM_RESOLUTION_HEIGHT)},
                 lores={"size": (self._config.LIVEVIEW_RESOLUTION_WIDTH, self._config.LIVEVIEW_RESOLUTION_HEIGHT)},
-                # encode="lores",
+                encode="lores",
                 display="lores",
                 buffer_count=3,
                 queue=False,
@@ -93,11 +100,34 @@ class Picamera2Service:
         logger.debug(f"{self.__module__} started")
 
     def stop(self):
+        super().stop()
+
         if self._picamera2:
             self._picamera2.stop()
             self._picamera2.close()  # need to close camera so it can be used by other processes also (or be started again)
 
         logger.debug(f"{self.__module__} stopped")
+
+    def start_stream(self):
+        self._picamera2.stop_recording()
+        encoder = MJPEGEncoder()
+        # encoder.frame_skip_count = 1  # every nth frame to save cpu/bandwith on
+        # low power devices but this can cause issues with timing it seems and permanent non-synchronizity
+
+        self._picamera2.start_recording(encoder, FileOutput(self._streaming_output))
+        print("encoding stream started")
+
+    def stop_stream(self):
+        self._picamera2.stop_recording()
+        print("encoding stream stopped")
+
+    def wait_for_lores_image(self):
+        """for other threads to receive a lores JPEG image"""
+        with self._streaming_output.condition:
+            if not self._streaming_output.condition.wait(timeout=2.0):
+                raise TimeoutError("timeout receiving frames")
+
+            return self._streaming_output.frame
 
     def do_capture(self, number_frames: int = 1):
         self._capture.set()
@@ -130,7 +160,7 @@ class Picamera2Service:
         adjust_amount = 0
         capture_time_assigned_timestamp_ns = None
 
-        while True:
+        while self._is_running:
             if self._capture.is_set():
                 self._capture.clear()
                 print("####### capture #######")

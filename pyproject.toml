@@ -36,6 +36,8 @@ dependencies = [
   "pydantic-settings",
   "gpiozero",
   "pillow>=10.0.0",
+  "fastapi",
+  "uvicorn",
 ]
 
 [project.optional-dependencies]
@@ -50,8 +52,8 @@ repository = "https://github.com/mgineer85/photobooth-wigglecam"
 documentation = "https://github.com/mgineer85/photobooth-wigglecam"
 
 [project.scripts]
-wigglecam_node = "node.__main__"
-# wigglecam_node_ui = "node.app_ui"
+# wigglecam_uvicorn = "uvicorn node.application:app --host=0.0.0.0 --port=8000 --log-level=debug"
+wigglecam_node = "node.__main__:main"
 #wigglify = "wigglify.cli:main"
 
 [tool.pdm]

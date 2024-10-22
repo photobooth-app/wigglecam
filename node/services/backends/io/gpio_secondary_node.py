@@ -4,7 +4,7 @@ from threading import Condition, Thread
 
 import gpiod
 
-from ..config.models import ConfigGpioSecondaryNode
+from ....config.models import ConfigGpioSecondaryNode
 
 logger = logging.getLogger(__name__)
 

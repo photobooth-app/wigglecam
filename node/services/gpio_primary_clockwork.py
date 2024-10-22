@@ -7,6 +7,7 @@ from gpiozero import Button as ZeroButton
 from gpiozero import DigitalOutputDevice
 
 from ..config.models import ConfigGpioPrimaryClockwork
+from .baseservice import BaseService
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +26,10 @@ class Button(ZeroButton):
             self._fire_events(self.pin_factory.ticks(), False)
 
 
-class GpioPrimaryClockworkService:
+class GpioPrimaryClockworkService(BaseService):
     def __init__(self, config: ConfigGpioPrimaryClockwork):
+        super().__init__()
+
         # init arguments
         self._config: ConfigGpioPrimaryClockwork = config
 
@@ -38,6 +41,8 @@ class GpioPrimaryClockworkService:
         pass
 
     def start(self):
+        super().start()
+
         # hardware pwm is preferred
         self.set_hardware_clock(enable=True)
         print("generating clock using hardware pwm overlay")
@@ -58,6 +63,8 @@ class GpioPrimaryClockworkService:
         logger.debug(f"{self.__module__} started")
 
     def stop(self):
+        super().stop()
+
         self.set_hardware_clock(enable=False)
 
         if self._trigger_out:
