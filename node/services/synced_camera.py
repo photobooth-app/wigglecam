@@ -2,18 +2,16 @@ import logging
 from threading import Thread
 
 from .camera_service import Picamera2Service
-from .gpio_secondary import GpioSecondaryService
+from .gpio_secondary_node import GpioSecondaryNodeService
 
 logger = logging.getLogger(__name__)
 
-FPS_NOMINAL = 10
-
 
 class SyncedCameraService:
-    def __init__(self, camera_service: Picamera2Service, gpio_service: GpioSecondaryService):
+    def __init__(self, camera_service: Picamera2Service, gpio_service: GpioSecondaryNodeService):
         # init the arguments
         self._camera_service: Picamera2Service = camera_service
-        self._gpio_service: GpioSecondaryService = gpio_service
+        self._gpio_service: GpioSecondaryNodeService = gpio_service
 
         # define private props
         self._sync_thread: Thread = None
@@ -26,7 +24,11 @@ class SyncedCameraService:
         self._wait_for_clock()
         print("got it, continue starting...")
 
-        self._camera_service.start(nominal_framerate=FPS_NOMINAL)
+        print("deriving nominal framerate from clock signal, counting 10 ticks...")
+        derived_fps = self._gpio_service.derive_nominal_framerate_from_clock()
+        print(f"got it, derived {derived_fps}fps...")
+
+        self._camera_service.start(nominal_framerate=derived_fps)
 
         self._sync_thread = Thread(name="_sync_thread", target=self._sync_fun, args=(), daemon=True)
         self._sync_thread.start()

@@ -4,15 +4,15 @@ from threading import Condition, Thread
 
 import gpiod
 
-from ..config.models import ConfigGpioSecondary
+from ..config.models import ConfigGpioSecondaryNode
 
 logger = logging.getLogger(__name__)
 
 
-class GpioSecondaryService:
-    def __init__(self, config: ConfigGpioSecondary):
+class GpioSecondaryNodeService:
+    def __init__(self, config: ConfigGpioSecondaryNode):
         # init with arguments
-        self._config: ConfigGpioSecondary = config
+        self._config: ConfigGpioSecondaryNode = config
 
         # private props
         self._gpiod_chip = None
@@ -45,18 +45,24 @@ class GpioSecondaryService:
             return False
         return (time.monotonic_ns() - self._clock_in_timestamp_ns) < TIMEOUT_CLOCK_SIGNAL_INVALID
 
-    def get_nominal_framerate(self) -> int:
-        return 10  # TODO: implement derive from clock
-
-    def _derive_framerate_from_clock(self) -> float:
-        """calc the framerate derived by monitoring the clock signal for some time.
+    def derive_nominal_framerate_from_clock(self) -> int:
+        """calc the framerate derived by monitoring the clock signal for 11 ticks (means 10 intervals).
         needs to set the nominal frame duration running freely while no adjustments are made to sync up
 
         Returns:
-            float: _description_
+            int: _description_
         """
-        pass
-        # TODO: implement.
+        try:
+            first_timestamp_ns = self.wait_for_clock_signal(timeout=1)
+            for _ in range(10):
+                last_timestamp_ns = self.wait_for_clock_signal(timeout=1)
+        except TimeoutError as exc:
+            raise RuntimeError("no clock, cannot derive nominal framerate!") from exc
+        else:
+            duration_10_ticks_s = (last_timestamp_ns - first_timestamp_ns) * 1.0e-9
+            fps = round(duration_10_ticks_s * 10.0)
+
+            return fps
 
     def _on_clock_in(self):
         with self._clock_in_condition:

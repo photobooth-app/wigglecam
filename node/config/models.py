@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 
 
-class ConfigGpioPrimary(BaseModel):
+class ConfigGpioPrimaryClockwork(BaseModel):
     enable_primary_gpio: bool = Field(default=False)
     # clock_out_pin_name: str = Field(default="GPIO18") # replaced by sysfs, need update
     trigger_out_pin_name: str = Field(default="GPIO17")
@@ -9,7 +9,7 @@ class ConfigGpioPrimary(BaseModel):
     FPS_NOMINAL: int = Field(default=10)
 
 
-class ConfigGpioSecondary(BaseModel):
+class ConfigGpioSecondaryNode(BaseModel):
     chip: str = Field(default="/dev/gpiochip0")
     clock_in_pin_name: str = Field(default="GPIO14")
     trigger_in_pin_name: str = Field(default="GPIO15")

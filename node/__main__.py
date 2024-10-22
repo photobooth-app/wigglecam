@@ -3,16 +3,16 @@ import time
 
 from .config import appconfig
 from .services.camera_service import Picamera2Service
-from .services.gpio_primary import GpioPrimaryService
-from .services.gpio_secondary import GpioSecondaryService
+from .services.gpio_primary_clockwork import GpioPrimaryClockworkService
+from .services.gpio_secondary_node import GpioSecondaryNodeService
 from .services.synced_camera import SyncedCameraService
 
 logger = logging.getLogger(__name__)
 
 # container
-gpio_primary_service = GpioPrimaryService(config=appconfig.primary_gpio)
+gpio_primary_service = GpioPrimaryClockworkService(config=appconfig.primary_gpio)
 picamera2_service = Picamera2Service(config=appconfig.picamera2)
-gpio_secondary_service = GpioSecondaryService(config=appconfig.secondary_gpio)
+gpio_secondary_service = GpioSecondaryNodeService(config=appconfig.secondary_gpio)
 synced_camera_service = SyncedCameraService(picamera2_service, gpio_secondary_service)
 
 

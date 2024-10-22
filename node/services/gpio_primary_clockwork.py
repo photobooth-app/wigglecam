@@ -6,7 +6,7 @@ from pathlib import Path
 from gpiozero import Button as ZeroButton
 from gpiozero import DigitalOutputDevice
 
-from ..config.models import ConfigGpioPrimary
+from ..config.models import ConfigGpioPrimaryClockwork
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +25,10 @@ class Button(ZeroButton):
             self._fire_events(self.pin_factory.ticks(), False)
 
 
-class GpioPrimaryService:
-    def __init__(self, config: ConfigGpioPrimary):
+class GpioPrimaryClockworkService:
+    def __init__(self, config: ConfigGpioPrimaryClockwork):
         # init arguments
-        self._config: ConfigGpioPrimary = config
+        self._config: ConfigGpioPrimaryClockwork = config
 
         # define private props
         self._trigger_out: DigitalOutputDevice = None
