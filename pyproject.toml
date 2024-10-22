@@ -41,8 +41,7 @@ dependencies = [
 [project.optional-dependencies]
 wigglify = [
   "opencv-python>=4.8.1",
-  "numpy>=1.26.0",
-  "psutil>=5.9.0",
+  "numpy>=2.0.0",
 ]
 
 [project.urls]
@@ -51,7 +50,8 @@ repository = "https://github.com/mgineer85/photobooth-wigglecam"
 documentation = "https://github.com/mgineer85/photobooth-wigglecam"
 
 [project.scripts]
-wigglecam_node = "node.__main__:main"
+wigglecam_node = "node.__main__"
+# wigglecam_node_ui = "node.app_ui"
 #wigglify = "wigglify.cli:main"
 
 [tool.pdm]
@@ -60,10 +60,9 @@ version = { source = "file", path = "node/__version__.py" }
 [tool.pdm.dev-dependencies]
 test = [
   "pytest>=7.4.0",
-  "pytest-benchmark>=4.0.0",
 ]
 lint = [
-  "ruff>=0.1.8"
+  "ruff"
 ]
 
 [tool.pdm.scripts]

@@ -49,6 +49,21 @@ class Picamera2Service:
 
         self._picamera2: Picamera2 = Picamera2(camera_num=self._config.camera_num)
 
+        # configure; camera needs to be stopped before
+        self._picamera2.configure(
+            self._picamera2.create_still_configuration(
+                main={"size": (self._config.CAPTURE_CAM_RESOLUTION_WIDTH, self._config.CAPTURE_CAM_RESOLUTION_HEIGHT)},
+                lores={"size": (self._config.LIVEVIEW_RESOLUTION_WIDTH, self._config.LIVEVIEW_RESOLUTION_HEIGHT)},
+                # encode="lores",
+                display="lores",
+                buffer_count=3,
+                queue=False,
+                controls={"FrameRate": self._nominal_framerate},
+                transform=Transform(hflip=False, vflip=False),
+            )
+        )
+        self._picamera2.options["quality"] = self._config.original_still_quality  # capture_file image quality
+
         if self._config.enable_preview_display:
             print("starting display preview")
             # Preview.DRM tested, but leads to many dropped frames.
@@ -57,22 +72,10 @@ class Picamera2Service:
             # Further refs:
             # https://github.com/raspberrypi/picamera2/issues/989
             self._picamera2.start_preview(Preview.QT, x=0, y=0, width=800, height=480)
-
-        # config camera
-        self._capture_config = self._picamera2.create_still_configuration(
-            main={"size": (self._config.CAPTURE_CAM_RESOLUTION_WIDTH, self._config.CAPTURE_CAM_RESOLUTION_HEIGHT)},
-            lores={"size": (self._config.LIVEVIEW_RESOLUTION_WIDTH, self._config.LIVEVIEW_RESOLUTION_HEIGHT)},
-            # encode="lores",
-            display="lores",
-            buffer_count=3,
-            queue=False,
-            controls={"FrameRate": self._nominal_framerate},
-            transform=Transform(hflip=0, vflip=0),
-        )
-
-        # configure; camera needs to be stopped before
-        self._picamera2.configure(self._capture_config)
-        self._picamera2.options["quality"] = self._config.original_still_quality  # capture_file image quality
+            # self._qpicamera2 = QPicamera2(self._picamera2, width=800, height=480, keep_ar=True)
+        else:
+            pass
+            # null Preview is automatically initialized and it needs at least one preview to drive the camera
 
         # start camera
         self._picamera2.start()
