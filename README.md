@@ -68,12 +68,24 @@ video=DSI-1:800x480M@60,rotate=180 # prepend left string! One line!
 
 Test with the PWM clock
 
+Pi3, Pi4 it's pwmchip0 channel 0
+
 ```sh
 echo 0 > /sys/class/pwm/pwmchip0/export
-pi@wigglecam-main:/sys/class/pwm/pwmchip0/pwm0 $ echo 100 > period
-pi@wigglecam-main:/sys/class/pwm/pwmchip0/pwm0 $ echo 50 > duty_cycle
+pi@wigglecam-main:/sys/class/pwm/pwmchip0/pwm0 $ echo 100000000 > period
+pi@wigglecam-main:/sys/class/pwm/pwmchip0/pwm0 $ echo 50000000 > duty_cycle
 pi@wigglecam-main:/sys/class/pwm/pwmchip0/pwm0 $ echo 1 > enable
 pi@wigglecam-main:/sys/class/pwm/pwmchip0/pwm0 $ echo 0 > enable
+```
+
+Pi5 it's pwmchip2 channel 2
+
+```sh
+echo 2 > /sys/class/pwm/pwmchip2/export
+pi@wigglecam-main:/sys/class/pwm/pwmchip2/pwm0 $ echo 100000000 > period
+pi@wigglecam-main:/sys/class/pwm/pwmchip2/pwm0 $ echo 50000000 > duty_cycle
+pi@wigglecam-main:/sys/class/pwm/pwmchip2/pwm0 $ echo 1 > enable
+pi@wigglecam-main:/sys/class/pwm/pwmchip2/pwm0 $ echo 0 > enable
 ```
 
 #### Install Primary Node
