@@ -85,10 +85,10 @@ class GpioPrimaryClockworkService(BaseService):
         # 1/10FPS = 0.1 * 1e6 = 100.000.000ns period
         # duty cycle = period / 2
         """
-        PWM_CHANNEL = "0"
+        PWM_CHANNEL = self._config.pwm_channel
         PERIOD = int(1 / self._config.FPS_NOMINAL * 1e9)  # 1e9=ns
         DUTY_CYCLE = PERIOD // 2
-        PWM_SYSFS = Path("/sys/class/pwm/pwmchip0")
+        PWM_SYSFS = Path(f"/sys/class/pwm/{self._config.pwmchip}")
 
         if not PWM_SYSFS.is_dir():
             raise RuntimeError("pwm overlay not enabled in config.txt")

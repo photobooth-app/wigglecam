@@ -7,6 +7,8 @@ class ConfigGpioPrimaryClockwork(BaseModel):
     trigger_out_pin_name: str = Field(default="GPIO17")
     ext_trigger_in_pin_name: str = Field(default="GPIO4")
     FPS_NOMINAL: int = Field(default=10)
+    pwmchip: str = Field(default="pwmchip2")  # pi5: 2, other 0
+    pwm_channel: int = Field(default=2)  # pi5: 2, other 0
 
 
 class ConfigGpioSecondaryNode(BaseModel):
