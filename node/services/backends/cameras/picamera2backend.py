@@ -65,8 +65,8 @@ class Picamera2Backend(BaseBackend):
                 lores={"size": (self._config.LIVEVIEW_RESOLUTION_WIDTH, self._config.LIVEVIEW_RESOLUTION_HEIGHT)},
                 encode="lores",
                 display="lores",
-                buffer_count=3,
-                queue=False,
+                buffer_count=2,
+                queue=True,
                 controls={"FrameRate": self._nominal_framerate},
                 transform=Transform(hflip=False, vflip=False),
             )
@@ -169,6 +169,11 @@ class Picamera2Backend(BaseBackend):
         adjust_amount_clamped_us = 0
         capture_time_assigned_timestamp_ns = None
 
+        # flush any old frames
+        for _ in range(3):
+            request = self._picamera2.capture_request(wait=True)
+            request.release()
+
         while self._is_running:
             if self._capture.is_set():
                 self._capture.clear()
@@ -208,7 +213,7 @@ class Picamera2Backend(BaseBackend):
                 if adjust_cycle_counter >= ADJUST_EVERY_X_CYCLE:
                     adjust_cycle_counter = 0
                     adjust_amount_us = (timestamp_delta or 0) / 1e3
-                    adjust_amount_clamped_us = self.clamp(adjust_amount_us, -0.45 * nominal_frame_duration_us, 0.45 * nominal_frame_duration_us)
+                    adjust_amount_clamped_us = self.clamp(adjust_amount_us, -0.1 * nominal_frame_duration_us, 0.1 * nominal_frame_duration_us)
                 else:
                     adjust_cycle_counter += 1
                     adjust_amount_us = 0
@@ -226,6 +231,7 @@ class Picamera2Backend(BaseBackend):
                     f"sensor_timestamp={round(picam_metadata['SensorTimestamp']/1e6,1)} ms, "
                     f"delta={round((timestamp_delta or 0)/1e6,1)} ms, "
                     f"FrameDuration={round(picam_metadata['FrameDuration']/1e3,1)} ms "
+                    f"ExposureTime={round(picam_metadata['ExposureTime']/1e3,1)} ms "
                     f"adjust_amount={round(adjust_amount_us/1e3,1)} ms "
                     f"adjust_amount_clamped={round(adjust_amount_clamped_us/1e3,1)} ms "
                 )
