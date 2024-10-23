@@ -153,11 +153,16 @@ class Picamera2Backend(BaseBackend):
 
         logger.debug("autofocus set")
 
+    @staticmethod
+    def clamp(n, min_value, max_value):
+        return max(min_value, min(n, max_value))
+
     def _camera_fun(self):
         print("starting _camera_fun")
         timestamp_delta = None
         adjust_cycle_counter = 0
-        adjust_amount = 0
+        adjust_amount_us = 0
+        adjust_amount_clamped_us = 0
         capture_time_assigned_timestamp_ns = None
 
         while self._is_running:
@@ -188,6 +193,8 @@ class Picamera2Backend(BaseBackend):
                 capture_time_assigned_timestamp_ns = self._timestamp_monotonic_ns
                 picam_metadata = self._picamera2.capture_metadata()
 
+                nominal_frame_duration_us = 1.0 / self._nominal_framerate * 1.0e6
+
                 if capture_time_assigned_timestamp_ns is not None:
                     timestamp_delta = picam_metadata["SensorTimestamp"] - capture_time_assigned_timestamp_ns  # in ns
                 else:
@@ -195,17 +202,18 @@ class Picamera2Backend(BaseBackend):
 
                 if adjust_cycle_counter >= ADJUST_EVERY_X_CYCLE:
                     adjust_cycle_counter = 0
-                    adjust_amount = (timestamp_delta or 0) / 1e3
-                    # TODO: need to clamp in both directions if so: adjust_amount = min(0.4 * 1.0 / self._nominal_framerate * 1.0e6, adjust_amount)
+                    adjust_amount_us = (timestamp_delta or 0) / 1e3
+                    adjust_amount_clamped_us = self.clamp(adjust_amount_us, -0.45 * nominal_frame_duration_us, 0.45 * nominal_frame_duration_us)
                 else:
                     adjust_cycle_counter += 1
-                    adjust_amount = 0
+                    adjust_amount_us = 0
+                    adjust_amount_clamped_us = 0
 
                 with self._picamera2.controls as ctrl:
                     # set new FrameDurationLimits based on P_controller output.
                     ctrl.FrameDurationLimits = (
-                        int((1.0 / self._nominal_framerate * 1.0e6) - adjust_amount),
-                        int((1.0 / self._nominal_framerate * 1.0e6) - adjust_amount),
+                        int((1.0 / self._nominal_framerate * 1.0e6) - adjust_amount_clamped_us),
+                        int((1.0 / self._nominal_framerate * 1.0e6) - adjust_amount_clamped_us),
                     )
 
                 print(
@@ -213,7 +221,8 @@ class Picamera2Backend(BaseBackend):
                     f"sensor_timestamp={round(picam_metadata['SensorTimestamp']/1e6,1)} ms, "
                     f"delta={round((timestamp_delta or 0)/1e6,1)} ms, "
                     f"FrameDuration={round(picam_metadata['FrameDuration']/1e3,1)} ms "
-                    f"adjust_amount={round(adjust_amount/1e3,1)} ms "
+                    f"adjust_amount={round(adjust_amount_us/1e3,1)} ms "
+                    f"adjust_amount_clamped={round(adjust_amount_clamped_us/1e3,1)} ms "
                 )
 
         print("_camera_fun left")

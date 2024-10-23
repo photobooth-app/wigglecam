@@ -60,7 +60,8 @@ class GpioSecondaryNodeService:
             raise RuntimeError("no clock, cannot derive nominal framerate!") from exc
         else:
             duration_10_ticks_s = (last_timestamp_ns - first_timestamp_ns) * 1.0e-9
-            fps = round(10.0 / duration_10_ticks_s)  # duration/10ticks = duration per tick so ^-1 is fps
+            duration_1_tick_s = duration_10_ticks_s / 10.0  # duration for 1_tick
+            fps = round(1.0 / duration_1_tick_s)  # fps because fMaster=fCamera*1.0 currently
 
             return fps
 

@@ -86,7 +86,8 @@ class GpioPrimaryClockworkService(BaseService):
         # duty cycle = period / 2
         """
         PWM_CHANNEL = self._config.pwm_channel
-        PERIOD = int(1 / self._config.FPS_NOMINAL * 1e9)  # 1e9=ns
+        PERIOD = int(1.0 / self._config.FPS_NOMINAL * 1e9)  # 1e9=ns
+        # PERIOD = int(0.5 / self._config.FPS_NOMINAL * 1e9)  # 1e9=ns  # double frequency!
         DUTY_CYCLE = PERIOD // 2
         PWM_SYSFS = Path(f"/sys/class/pwm/{self._config.pwmchip}")
 
