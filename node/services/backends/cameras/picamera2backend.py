@@ -37,7 +37,7 @@ class Picamera2Backend(BaseBackend):
         self._capture = Event()
         self._streaming_output: StreamingOutput = StreamingOutput()
 
-        logger.info(f"global_camera_info {Picamera2.global_camera_info()}")
+        print(f"global_camera_info {Picamera2.global_camera_info()}")
 
     def start(self, nominal_framerate: int = None):
         """To start the backend, configure picamera2"""
@@ -196,6 +196,7 @@ class Picamera2Backend(BaseBackend):
                 if adjust_cycle_counter >= ADJUST_EVERY_X_CYCLE:
                     adjust_cycle_counter = 0
                     adjust_amount = (timestamp_delta or 0) / 1e3
+                    # TODO: need to clamp in both directions if so: adjust_amount = min(0.4 * 1.0 / self._nominal_framerate * 1.0e6, adjust_amount)
                 else:
                     adjust_cycle_counter += 1
                     adjust_amount = 0
@@ -211,7 +212,8 @@ class Picamera2Backend(BaseBackend):
                     f"clock_in={round((capture_time_assigned_timestamp_ns or 0)/1e6,1)} ms, "
                     f"sensor_timestamp={round(picam_metadata['SensorTimestamp']/1e6,1)} ms, "
                     f"delta={round((timestamp_delta or 0)/1e6,1)} ms, "
-                    f"adjust_amount={round(adjust_amount/1e3,1)} ms"
+                    f"FrameDuration={round(picam_metadata['FrameDuration']/1e3,1)} ms "
+                    f"adjust_amount={round(adjust_amount/1e3,1)} ms "
                 )
 
         print("_camera_fun left")
