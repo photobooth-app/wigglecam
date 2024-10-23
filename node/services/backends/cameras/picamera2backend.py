@@ -2,7 +2,7 @@ import logging
 import time
 from datetime import datetime
 from pathlib import Path
-from threading import Event, Thread
+from threading import Condition, Event, Thread
 
 from libcamera import Transform, controls
 from picamera2 import Picamera2, Preview
@@ -29,12 +29,14 @@ class Picamera2Backend(BaseBackend):
         self._timestamp_monotonic_ns = None
         self._nominal_framerate: float = None
         self._adjust_sync_offset: int = 0
+        self._wait_tick: Condition = None
         self._capture: Event = None
         self._camera_thread: Thread = None
         self._streaming_output: StreamingOutput = None
 
         # initialize private props
         self._capture = Event()
+        self._wait_tick: Condition = Condition()
         self._streaming_output: StreamingOutput = StreamingOutput()
 
         print(f"global_camera_info {Picamera2.global_camera_info()}")
@@ -133,7 +135,9 @@ class Picamera2Backend(BaseBackend):
         self._capture.set()
 
     def sync_tick(self, timestamp_ns: int):
-        self._timestamp_monotonic_ns = timestamp_ns
+        with self._wait_tick:
+            self._timestamp_monotonic_ns = timestamp_ns
+            self._wait_tick.notify_all()
 
     def _init_autofocus(self):
         """
@@ -186,12 +190,13 @@ class Picamera2Backend(BaseBackend):
 
                 print(f"####### capture end, took {round((time.time() - tms), 2)}s #######")
             else:
-                if capture_time_assigned_timestamp_ns == self._timestamp_monotonic_ns:
-                    print("warning: timestamp monotonic did not increase!")
-                    adjust_cycle_counter = 0
+                with self._wait_tick:
+                    picam_metadata = self._picamera2.capture_metadata()
+                    # print("waiting for tick")
+                    self._wait_tick.wait(timeout=1.0)
+                    # print("got tick")
 
                 capture_time_assigned_timestamp_ns = self._timestamp_monotonic_ns
-                picam_metadata = self._picamera2.capture_metadata()
 
                 nominal_frame_duration_us = 1.0 / self._nominal_framerate * 1.0e6
 

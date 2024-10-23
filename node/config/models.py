@@ -6,7 +6,7 @@ class ConfigGpioPrimaryClockwork(BaseModel):
     # clock_out_pin_name: str = Field(default="GPIO18") # replaced by sysfs, need update
     trigger_out_pin_name: str = Field(default="GPIO17")
     ext_trigger_in_pin_name: str = Field(default="GPIO4")
-    FPS_NOMINAL: int = Field(default=3)  # best to choose slightly below mode fps of camera
+    FPS_NOMINAL: int = Field(default=9)  # best to choose slightly below mode fps of camera
     pwmchip: str = Field(default="pwmchip2")  # pi5: 2, other 0
     pwm_channel: int = Field(default=2)  # pi5: 2, other 0
 
