@@ -2,7 +2,8 @@ import logging
 import time
 from datetime import datetime
 from pathlib import Path
-from threading import Condition, Event, Thread
+from queue import Full, Queue
+from threading import Event, Thread
 
 from libcamera import Transform, controls
 from picamera2 import Picamera2, Preview
@@ -15,7 +16,7 @@ from .backend import BaseBackend, StreamingOutput
 logger = logging.getLogger(__name__)
 
 
-ADJUST_EVERY_X_CYCLE = 10
+ADJUST_EVERY_X_CYCLE = 8
 
 
 class Picamera2Backend(BaseBackend):
@@ -26,17 +27,15 @@ class Picamera2Backend(BaseBackend):
 
         # private props
         self._picamera2: Picamera2 = None
-        self._timestamp_monotonic_ns = None
+        self._queue_timestamp_monotonic_ns: Queue = None
         self._nominal_framerate: float = None
         self._adjust_sync_offset: int = 0
-        self._wait_tick: Condition = None
         self._capture: Event = None
         self._camera_thread: Thread = None
         self._streaming_output: StreamingOutput = None
 
         # initialize private props
         self._capture = Event()
-        self._wait_tick: Condition = Condition()
         self._streaming_output: StreamingOutput = StreamingOutput()
 
         print(f"global_camera_info {Picamera2.global_camera_info()}")
@@ -50,6 +49,7 @@ class Picamera2Backend(BaseBackend):
             raise RuntimeError("nominal framerate needs to be given!")
 
         self._nominal_framerate = nominal_framerate
+        self._queue_timestamp_monotonic_ns: Queue = Queue(maxsize=1)
 
         # https://github.com/raspberrypi/picamera2/issues/576
         if self._picamera2:
@@ -113,7 +113,7 @@ class Picamera2Backend(BaseBackend):
     def start_stream(self):
         self._picamera2.stop_recording()
         encoder = MJPEGEncoder()
-        # encoder.frame_skip_count = 1  # every nth frame to save cpu/bandwith on
+        # encoder.frame_skip_count = 2  # every nth frame to save cpu/bandwith on
         # low power devices but this can cause issues with timing it seems and permanent non-synchronizity
 
         self._picamera2.start_recording(encoder, FileOutput(self._streaming_output))
@@ -135,9 +135,10 @@ class Picamera2Backend(BaseBackend):
         self._capture.set()
 
     def sync_tick(self, timestamp_ns: int):
-        with self._wait_tick:
-            self._timestamp_monotonic_ns = timestamp_ns
-            self._wait_tick.notify_all()
+        try:
+            self._queue_timestamp_monotonic_ns.put_nowait(timestamp_ns)
+        except Full:
+            print("could not queue timestamp - camera not started or too low for nominal fps rate?")
 
     def _init_autofocus(self):
         """
@@ -163,16 +164,12 @@ class Picamera2Backend(BaseBackend):
 
     def _camera_fun(self):
         print("starting _camera_fun")
-        timestamp_delta = None
+        timestamp_delta = 0
         adjust_cycle_counter = 0
         adjust_amount_us = 0
         adjust_amount_clamped_us = 0
         capture_time_assigned_timestamp_ns = None
-
-        # flush any old frames
-        for _ in range(3):
-            request = self._picamera2.capture_request(wait=True)
-            request.release()
+        nominal_frame_duration_us = 1.0 / self._nominal_framerate * 1.0e6
 
         while self._is_running:
             if self._capture.is_set():
@@ -182,8 +179,7 @@ class Picamera2Backend(BaseBackend):
                 filename = Path(f"img_{datetime.now().astimezone().strftime('%Y%m%d-%H%M%S-%f')}")
                 print(f"filename {filename}")
 
-                if timestamp_delta:
-                    print(f"delta right before capture is {round(timestamp_delta/1e6,1)} ms")
+                print(f"delta right before capture is {round((timestamp_delta or 999)/1e6,1)} ms")  # timestamt_delta could be None in theory...
 
                 tms = time.time()
                 # take pick like following line leads to stalling in camera thread. the below method seems to have no effect on picam's cam thread
@@ -195,41 +191,33 @@ class Picamera2Backend(BaseBackend):
 
                 print(f"####### capture end, took {round((time.time() - tms), 2)}s #######")
             else:
-                with self._wait_tick:
-                    picam_metadata = self._picamera2.capture_metadata()
-                    # print("waiting for tick")
-                    self._wait_tick.wait(timeout=1.0)
-                    # print("got tick")
+                job = self._picamera2.capture_request(wait=False)
+                # TODO: error checking, recovering from timeouts
+                capture_time_assigned_timestamp_ns = self._queue_timestamp_monotonic_ns.get(block=True, timeout=2.0)
+                request = self._picamera2.wait(job, timeout=2.0)
+                picam_metadata = request.get_metadata()
+                request.release()
 
-                capture_time_assigned_timestamp_ns = self._timestamp_monotonic_ns
-
-                nominal_frame_duration_us = 1.0 / self._nominal_framerate * 1.0e6
-
-                if capture_time_assigned_timestamp_ns is not None:
-                    timestamp_delta = picam_metadata["SensorTimestamp"] - capture_time_assigned_timestamp_ns  # in ns
-                else:
-                    print("warning: no sync time available to synchronize to")
+                timestamp_delta = picam_metadata["SensorTimestamp"] - capture_time_assigned_timestamp_ns  # in ns
 
                 if adjust_cycle_counter >= ADJUST_EVERY_X_CYCLE:
                     adjust_cycle_counter = 0
-                    adjust_amount_us = (timestamp_delta or 0) / 1e3
-                    adjust_amount_clamped_us = self.clamp(adjust_amount_us, -0.1 * nominal_frame_duration_us, 0.1 * nominal_frame_duration_us)
+                    adjust_amount_us = timestamp_delta / 1.0e3
+                    adjust_amount_clamped_us = self.clamp(adjust_amount_us, -0.9 * nominal_frame_duration_us, 0.9 * nominal_frame_duration_us)
                 else:
                     adjust_cycle_counter += 1
                     adjust_amount_us = 0
                     adjust_amount_clamped_us = 0
 
                 with self._picamera2.controls as ctrl:
-                    # set new FrameDurationLimits based on P_controller output.
-                    ctrl.FrameDurationLimits = (
-                        int((1.0 / self._nominal_framerate * 1.0e6) - adjust_amount_clamped_us),
-                        int((1.0 / self._nominal_framerate * 1.0e6) - adjust_amount_clamped_us),
-                    )
+                    fixed_frame_duration = int(nominal_frame_duration_us - adjust_amount_clamped_us)
+                    ctrl.FrameDurationLimits = (fixed_frame_duration,) * 2
 
                 print(
                     f"clock_in={round((capture_time_assigned_timestamp_ns or 0)/1e6,1)} ms, "
                     f"sensor_timestamp={round(picam_metadata['SensorTimestamp']/1e6,1)} ms, "
-                    f"delta={round((timestamp_delta or 0)/1e6,1)} ms, "
+                    f"adjust_cycle_counter={adjust_cycle_counter}, "
+                    f"delta={round((timestamp_delta)/1e6,1)} ms, "
                     f"FrameDuration={round(picam_metadata['FrameDuration']/1e3,1)} ms "
                     f"ExposureTime={round(picam_metadata['ExposureTime']/1e3,1)} ms "
                     f"adjust_amount={round(adjust_amount_us/1e3,1)} ms "
