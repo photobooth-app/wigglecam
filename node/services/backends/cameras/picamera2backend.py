@@ -131,7 +131,7 @@ class Picamera2Backend(BaseBackend):
 
             return self._streaming_output.frame
 
-    def do_capture(self, number_frames: int = 1):
+    def do_capture(self, filename: str = None, number_frames: int = 1):
         self._capture.set()
 
     def sync_tick(self, timestamp_ns: int):
@@ -176,17 +176,19 @@ class Picamera2Backend(BaseBackend):
                 self._capture.clear()
                 print("####### capture #######")
 
+                folder = Path("./tmp/")
                 filename = Path(f"img_{datetime.now().astimezone().strftime('%Y%m%d-%H%M%S-%f')}")
-                print(f"filename {filename}")
+                filepath = folder / filename
+                print(f"{filepath=}")
 
-                print(f"delta right before capture is {round((timestamp_delta or 999)/1e6,1)} ms")  # timestamt_delta could be None in theory...
+                print(f"delta right before capture is {round(timestamp_delta/1e6,1)} ms")
 
                 tms = time.time()
                 # take pick like following line leads to stalling in camera thread. the below method seems to have no effect on picam's cam thread
                 # picam_metadata = picamera2.capture_file(f"{filename}.jpg")
                 # It's better to capture the still in this thread, not in the one driving the camera
                 request = self._picamera2.capture_request()
-                request.save("main", filename.with_suffix(".jpg"))
+                request.save("main", filepath.with_suffix(".jpg"))
                 request.release()
 
                 print(f"####### capture end, took {round((time.time() - tms), 2)}s #######")

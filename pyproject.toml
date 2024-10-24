@@ -32,12 +32,12 @@ keywords = [
 ]
 
 dependencies = [
-  "pydantic",
-  "pydantic-settings",
-  "gpiozero",
-  "pillow>=10.0.0",
-  "fastapi",
-  "uvicorn",
+    "pydantic",
+    "pydantic-settings",
+    "gpiozero",
+    "pillow>=10.0.0",
+    "fastapi",
+    "uvicorn",
 ]
 
 [project.optional-dependencies]
