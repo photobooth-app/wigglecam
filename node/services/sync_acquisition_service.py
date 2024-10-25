@@ -157,10 +157,12 @@ class SyncedAcquisitionService(BaseService):
         while self._device_is_running:
             try:
                 timestamp_ns = self._gpio_backend.wait_for_clock_rise_signal(timeout=1)
-                self._camera_backend.sync_tick(timestamp_ns)
             except TimeoutError:
                 # stop devices when no clock is avail, supervisor enables again after clock is received, derives new framerate ans starts backends
+                logger.error("no clock signal received within timeout! stopping devices.")
                 self._device_stop()
+            else:
+                self._camera_backend.sync_tick(timestamp_ns)
 
     def _capture_fun(self):
         while self._device_is_running:

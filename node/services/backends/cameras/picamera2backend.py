@@ -2,7 +2,7 @@ import logging
 import time
 from datetime import datetime
 from pathlib import Path
-from queue import Full, Queue
+from queue import Empty, Full, Queue
 from threading import Event, Thread
 
 from libcamera import Transform, controls
@@ -220,9 +220,16 @@ class Picamera2Backend(BaseBackend):
                 logger.info(f"####### capture end, took {round((time.time() - tms), 2)}s #######")
             else:
                 job = self._picamera2.capture_request(wait=False)
-                # TODO: error checking, recovering from timeouts
-                capture_time_assigned_timestamp_ns = self._queue_timestamp_monotonic_ns.get(block=True, timeout=2.0)
-                request = self._picamera2.wait(job, timeout=2.0)
+
+                try:
+                    capture_time_assigned_timestamp_ns = self._queue_timestamp_monotonic_ns.get(block=True, timeout=2.0)
+                    request = self._picamera2.wait(job, timeout=2.0)
+                except (Empty, TimeoutError):  # no information in exc avail so omitted
+                    logger.warning("timeout while waiting for clock/camera")
+                    # continue so .is_running is checked. if supervisor detected already, var is false and effective aborted the thread.
+                    # if it is still true, maybe it was restarted already and we can try again?
+                    continue
+
                 picam_metadata = request.get_metadata()
                 request.release()
 
