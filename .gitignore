@@ -1,6 +1,12 @@
-
 # ignore user folders
+/config
+/data
+/media
+/log
+log/*.log*
+/userdata
 /tmp
+/recycle
 /output_images
 /input_images/wiggle_*_*.jpg
 **/*experimental
