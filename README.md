@@ -28,7 +28,7 @@ sudo apt full-upgrade
 
 sudo usermod --append --groups gpio $(whoami)
 
-sudo apt install -y python3-picamera2 python3-opencv python3-pip pipx
+sudo apt install -y python3-picamera2 python3-opencv python3-pip pipx git vim
 pipx ensurepath # reboot afterwards!
 
 pipx install --system-site-packages git+https://github.com/photobooth-app/wigglecam.git
@@ -46,6 +46,9 @@ On all systems edit `/boot/firmware/config.txt` as follows:
 # rotate=0 because camera is upside down in case
 dtoverlay=imx708,rotation=0
 
+# depending on the camera resolution you might need little more cma memory, for example:
+dtoverlay=vc4-kms-v3d,cma-320
+
 # display (primary node)
 display_auto_detect=0
 dtoverlay=vc4-kms-dsi-waveshare-800x480,invx,invy #https://github.com/raspberrypi/linux/issues/6414
@@ -53,6 +56,9 @@ dtoverlay=vc4-kms-dsi-waveshare-800x480,invx,invy #https://github.com/raspberryp
 # master clock (primary node)
 dtparam=audio=off # because GPIO18 interferes with audio
 dtoverlay=pwm,pin=18,func=2 # GPIO18 reserved for hardware pwm
+
+
+# 
 
 # shutdown button signal
 # TODO
