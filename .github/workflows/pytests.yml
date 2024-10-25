@@ -11,30 +11,6 @@ permissions:
   contents: read
 
 jobs:
-  tests:
-    runs-on: ubuntu-latest
-    continue-on-error: false
-    strategy:
-      fail-fast: true
-      matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: install pdm
-        run: |
-          pipx install pdm # on hosted pipx is installed
-          pdm install
-      - name: Run pytest
-        run: |
-          pdm run test
-      - uses: actions/upload-artifact@v4
-        with:
-          name: coverage-${{ matrix.python-version }}
-          path: coverage.xml
 
   tests-hardware-rpi:
     runs-on: [self-hosted, rpi]
@@ -55,7 +31,7 @@ jobs:
           path: ./coverage.xml
 
   upload-to-codecov:
-    needs: [tests, tests-hardware-rpi]
+    needs: [tests-hardware-rpi]
     runs-on: ubuntu-latest
     if: ${{ github.repository_owner == 'photobooth-app' }}
     steps:
