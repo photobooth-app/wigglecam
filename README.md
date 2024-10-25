@@ -121,7 +121,8 @@ After=default.target
 [Service]
 Type=simple
 Restart=always
-WorkingDirectory=%h/ # used as datafolder!
+# working directory is used as datafolder
+WorkingDirectory=%h/
 Environment="QT_QPA_PLATFORM=linuxfb"
 #ExecStart=/home/pi/.local/bin/wigglecam_minimal # true for pipx install
 ExecStart=/home/pi/.local/bin/wigglecam_api # true for pipx install
