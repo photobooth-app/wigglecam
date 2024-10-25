@@ -2,10 +2,11 @@ import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
+from importlib import import_module
 from pathlib import Path
 from threading import Event, Thread
 
-from .backends.cameras.picamera2backend import Picamera2Backend
+from .backends.cameras.abstractbackend import AbstractBackend
 from .backends.io.gpiobackend import GpioSecondaryNodeService
 from .baseservice import BaseService
 from .config import appconfig
@@ -35,7 +36,7 @@ class SyncedAcquisitionService(BaseService):
 
         # define private props
         # to sync, a camera backend and io backend is used.
-        self._camera_backend: Picamera2Backend = None
+        self._camera_backend: AbstractBackend = None
         self._gpio_backend: GpioSecondaryNodeService = None
         self._sync_thread: Thread = None
         self._capture_thread: Thread = None
@@ -46,12 +47,15 @@ class SyncedAcquisitionService(BaseService):
 
         # initialize private properties.
         # currently only picamera2 and gpio backend are supported, may be extended in the future
-        self._camera_backend: Picamera2Backend = Picamera2Backend(appconfig.backend_picamera2)
         self._gpio_backend: GpioSecondaryNodeService = GpioSecondaryNodeService(appconfig.backend_gpio)
         self._flag_execute_job: Event = Event()
 
     def start(self):
         super().start()
+
+        self._camera_backend: AbstractBackend = self._import_backend(self._config.backends.active_backend)(
+            getattr(self._config.backends, str((self._config.backends.active_backend).lower()))
+        )
 
         self._gpio_backend.start()
 
@@ -66,6 +70,17 @@ class SyncedAcquisitionService(BaseService):
         self._gpio_backend.stop()
 
         logger.debug(f"{self.__module__} stopped")
+
+    @staticmethod
+    def _import_backend(backend: str):
+        # dynamic import of backend
+
+        module_path = f".backends.cameras.{backend.lower()}"
+        class_name = f"{backend}Backend"
+        pkg = ".".join(__name__.split(".")[:-1])  # to allow relative imports
+
+        module = import_module(module_path, package=pkg)
+        return getattr(module, class_name)
 
     def gen_stream(self):
         """

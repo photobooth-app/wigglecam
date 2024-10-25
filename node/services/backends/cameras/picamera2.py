@@ -11,7 +11,7 @@ from picamera2.encoders import MJPEGEncoder
 from picamera2.outputs import FileOutput
 
 from ...config.models import ConfigBackendPicamera2
-from .backend import BaseBackend, StreamingOutput
+from .abstractbackend import AbstractBackend, StreamingOutput
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 ADJUST_EVERY_X_CYCLE = 8
 
 
-class Picamera2Backend(BaseBackend):
+class Picamera2Backend(AbstractBackend):
     def __init__(self, config: ConfigBackendPicamera2):
         super().__init__()
         # init with arguments

@@ -1,12 +1,10 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
 class ConfigLogging(BaseModel):
     level: str = Field(default="DEBUG")
-
-
-class ConfigSyncedAcquisition(BaseModel):
-    allow_standalone_job: bool = Field(default=True)
 
 
 class ConfigBackendGpio(BaseModel):
@@ -21,6 +19,10 @@ class ConfigBackendGpio(BaseModel):
     pwm_channel: int = Field(default=2)  # pi5: 2, other 0
 
 
+class ConfigBackendVirtualcamera(BaseModel):
+    pass  # nothing to configure
+
+
 class ConfigBackendPicamera2(BaseModel):
     camera_num: int = Field(default=0)
     CAPTURE_CAM_RESOLUTION_WIDTH: int = Field(default=4608)
@@ -29,3 +31,19 @@ class ConfigBackendPicamera2(BaseModel):
     LIVEVIEW_RESOLUTION_WIDTH: int = Field(default=768)
     LIVEVIEW_RESOLUTION_HEIGHT: int = Field(default=432)
     original_still_quality: int = Field(default=90)
+
+
+class GroupBackend(BaseModel):
+    active_backend: Literal["VirtualCamera", "Picamera2"] = Field(
+        title="Active Backend",
+        default="VirtualCamera",
+        description="Backend to capture images from.",
+    )
+
+    virtualcamera: ConfigBackendVirtualcamera = ConfigBackendVirtualcamera()
+    picamera2: ConfigBackendPicamera2 = ConfigBackendPicamera2()
+
+
+class ConfigSyncedAcquisition(BaseModel):
+    allow_standalone_job: bool = Field(default=True)
+    backends: GroupBackend = Field(default=GroupBackend())
