@@ -1,7 +1,6 @@
 """Application module."""
 
 import logging
-import os
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -11,18 +10,11 @@ from fastapi.exceptions import HTTPException, RequestValidationError
 from fastapi.staticfiles import StaticFiles
 
 from .__version__ import __version__
+from .common_utils import create_basic_folders
 from .container import container
 from .routers import api
 
 logger = logging.getLogger(f"{__name__}")
-
-
-def _create_basic_folders():
-    os.makedirs("media", exist_ok=True)
-    os.makedirs("userdata", exist_ok=True)
-    os.makedirs("log", exist_ok=True)
-    os.makedirs("config", exist_ok=True)
-    os.makedirs("tmp", exist_ok=True)
 
 
 @asynccontextmanager
@@ -38,7 +30,7 @@ async def lifespan(_: FastAPI):
 
 def _create_app() -> FastAPI:
     try:
-        _create_basic_folders()
+        create_basic_folders()
     except Exception as exc:
         logger.critical(f"cannot create data folders, error: {exc}")
         raise RuntimeError(f"cannot create data folders, error: {exc}") from exc

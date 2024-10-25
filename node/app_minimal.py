@@ -4,10 +4,12 @@ import time
 
 from gpiozero import Button as ZeroButton
 
+from .common_utils import create_basic_folders
+
 logger = logging.getLogger(__name__)
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--shutter_pin", action="store", default="GPIO4", help="GPIO the shutter button is connected to (default: %(default)s).")
-args = parser.parse_args()
 
 
 class Button(ZeroButton):
@@ -26,6 +28,14 @@ class Button(ZeroButton):
 
 def main():
     from .container import container
+
+    args = parser.parse_args()  # parse here, not above because pytest system exit 2
+
+    try:
+        create_basic_folders()
+    except Exception as exc:
+        logger.critical(f"cannot create data folders, error: {exc}")
+        raise RuntimeError(f"cannot create data folders, error: {exc}") from exc
 
     shutter_pin = args.shutter_pin
     logger.info(f"shutter pin registered on {shutter_pin}")

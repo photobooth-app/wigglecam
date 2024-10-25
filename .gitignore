@@ -34,3 +34,4 @@ pdm.lock
 # ignore .DS_Store files in macos
 .DS_Store
 
+*.token
