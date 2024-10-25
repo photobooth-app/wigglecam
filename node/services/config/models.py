@@ -14,7 +14,7 @@ class ConfigBackendGpio(BaseModel):
     trigger_out_pin_name: str = Field(default="GPIO17")
 
     enable_clock: bool = Field(default=False)
-    FPS_NOMINAL: int = Field(default=9)  # needs to be lower than cameras mode max fps to allow for control reserve
+    fps_nominal: int = Field(default=9)  # needs to be lower than cameras mode max fps to allow for control reserve
     pwmchip: str = Field(default="pwmchip2")  # pi5: pwmchip2, other pwmchip0
     pwm_channel: int = Field(default=2)  # pi5: 2, other 0
 

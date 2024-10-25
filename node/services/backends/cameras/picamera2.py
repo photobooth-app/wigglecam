@@ -82,7 +82,7 @@ class Picamera2Backend(AbstractBackend):
             # Preview.QT seems to work reasonably well, so use this for now hardcoded.
             # Further refs:
             # https://github.com/raspberrypi/picamera2/issues/989
-            self._picamera2.start_preview(Preview.QT, x=0, y=0, width=800, height=480)
+            self._picamera2.start_preview(Preview.QT, x=0, y=0, width=400, height=240)
             # self._qpicamera2 = QPicamera2(self._picamera2, width=800, height=480, keep_ar=True)
         else:
             pass

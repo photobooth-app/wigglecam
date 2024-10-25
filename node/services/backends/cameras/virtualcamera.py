@@ -36,8 +36,6 @@ class VirtualCameraBackend(AbstractBackend):
         imarray = numpy.random.rand(200, 200, 3) * 255
         random_image = Image.fromarray(imarray.astype("uint8"), "RGB")
         random_image.save(byte_io, format="JPEG", quality=50)
-        # random_image = Image.new("RGB", (64, 64), color="green")
-        # random_image.save(byte_io, format="JPEG", quality=50)
 
         return byte_io.getbuffer()
 
