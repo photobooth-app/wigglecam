@@ -61,13 +61,18 @@ version = { source = "file", path = "node/__version__.py" }
 [tool.pdm.dev-dependencies]
 test = [
   "pytest>=7.4.0",
+  "pytest-benchmark>=4.0.0",
+  "pytest-cov>=4.1.0",
+  "coverage[toml]>=7.4.0",
+  
 ]
 lint = [
   "ruff"
 ]
 
 [tool.pdm.scripts]
-test = "pytest --basetemp=./tests_tmp/ -v ./tests"
+test = "pytest --basetemp=./tests_tmp/ -v ./tests/tests --cov-report=term --cov-report=xml:coverage.xml --cov"
+benchmark = "pytest --basetemp=./tests_tmp/ -v ./tests/benchmarks"
 
 [tool.ruff]
 line-length = 150
@@ -91,11 +96,18 @@ ignore = [
 convention = "google"
 
 [tool.pytest.ini_options]
-testpaths = "tests"
+testpaths = ["tests"]
 log_cli = true
 log_cli_level = "DEBUG"
 log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
 log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+
+[tool.coverage.run]
+# disable couldnt-parse: https://github.com/nedbat/coveragepy/issues/1392
+disable_warnings = ["couldnt-parse"]
+omit = ["test_*.py", "./tests/*"]
+parallel = true
+concurrency = ["thread", "multiprocessing"]
 
 [build-system]
 requires = ["pdm-backend"]
@@ -104,3 +116,4 @@ build-backend = "pdm.backend"
 
 [tool.pdm.build]
 includes = ["./node"]
+
