@@ -18,55 +18,90 @@ Turn stereoscopic images into a wigglegram.
 
 ## Setup
 
-### All systems
+### Prepare the Systems
 
-```
-    1. Install image (bookworm 64bit, lite) on all systems (rpi imager), connect to wifi
-    2. All hosts have same name, get IP addresses from your router
-    3. Log in each device to set new hostname:
-to identify, invoke some SD activity (like upgrade or something) to identify the board
-        a. Wigglecam-a  --> cam2
-        b. Wigglecam-b --> cam1 (leftmost)
-        c. Wigglecam-c --> cam4 (rightmost)
-        d. Wigglecam-main --> cam3
-(means mapping is not same as hostname numbering)
-    4. Update and upgrade all systems
-    5. Install packages:
-        a. sudo usermod --append --groups gpio $(whoami)
-        b. sudo apt install -y python3-picamera2 python3-opencv
-        c. Sudo apt install python3-pip
-        d. Pip install --break-system-packages pydantic pydantic-settings
-        e. Sudo apt install pipx
+#### Basic Installation
 
+```sh
+sudo apt update
+sudo apt full-upgrade
 
+sudo usermod --append --groups gpio $(whoami)
+
+sudo apt install -y python3-picamera2 python3-opencv python3-pip pipx
+pipx ensurepath # reboot afterwards!
+
+pipx install --system-site-packages git+https://github.com/mgineer85/wigglecam.git
 ```
 
-### Primary Node
+#### Basic configuration
 
-#### Prepare Primary Node System
+On all systems edit `/boot/firmware/config.txt` as follows:
 
 ```ini
+# add to all section
+[all]
+
+# camera
 # rotate=0 because camera is upside down in case
 dtoverlay=imx708,rotation=0
 
-# display
+# display (primary node)
 display_auto_detect=0
 dtoverlay=vc4-kms-dsi-waveshare-800x480,invx,invy #https://github.com/raspberrypi/linux/issues/6414
 
-# hardware pwm as clock
+# master clock (primary node)
 dtparam=audio=off # because GPIO18 interferes with audio
-dtoverlay=pwm,pin=18,func=2 # GPIO18
+dtoverlay=pwm,pin=18,func=2 # GPIO18 reserved for hardware pwm
 
 # shutdown button signal
 # TODO
 ```
 
-```ini
-Cmdline.txt for master only:
-video=DSI-1:800x480M@60,rotate=180 # prepend left string! One line!
+On the primary node, edit `/boot/firmware/cmdline.txt` prepend the following `video=DSI-1:800x480M@60,rotate=180` to the existing text. The result could look like this:
+
+```sh
+video=DSI-1:800x480M@60,rotate=180 console=tty1 root=PARTUUID=0dfd3080-02 rootfstype=ext4 fsck.repair=yes rootwait cfg80211.ieee80211_regdom=DE
 ```
 
-Test with the PWM clock
+### Configure the Nodes
+
+The nodes are configured using .env files
+
+#### Primary Node
+
+The primary node has a display attached and is responsible to generate the clock signal the secondary nodes synchronize to. To save hardware, a primary node can be used as secondary node simultaneously.
+
+Edit `~/.env.primary` and place following for the reference 3d printed wigglecam:
+
+```sh
+# enable clock generator on primary:
+backend_gpio__enable_clock="True"
+# primary is also preview display device:
+syncedacquisition__backends__picamera2__enable_preview_display="True"
+```
+
+Edit `~/.env.node` and place following for the reference 3d printed wigglecam:
+
+```sh
+# likely empty... haha
+```
+
+### First Start of the node
+
+After installation AND reboot, following commands are available:
+
+- `wigglecam_minimal`: Useful for first testing and a very basic setup for the 3d printed camera. There is no need to have an active ethernet connection between the nodes in the wild.
+- `wigglecam_api`: Currently a very basic implementation providing a HTTP server and a REST api to automate the capture and data collection from all nodes. The REST api documentation is available browsing to `http://localhost:8000/api/docs` on the same device after starting the api. This command is the default on secondary nodes.
+
+On the node with the display, there might be issues on startup QT complaining about missing drivers on the lite system. Try different platform drivers by prepending an environment variable for example as follows:
+
+- `QT_QPA_PLATFORM=linuxfb wigglecam_minimal` or
+- `QT_QPA_PLATFORM=eglfs wigglecam_minimal`
+
+## Troubleshooting
+
+### Test the Hardware PWM
 
 Pi3, Pi4 it's pwmchip0 channel 0
 
@@ -87,42 +122,3 @@ pi@wigglecam-main:/sys/class/pwm/pwmchip2/pwm0 $ echo 50000000 > duty_cycle
 pi@wigglecam-main:/sys/class/pwm/pwmchip2/pwm0 $ echo 1 > enable
 pi@wigglecam-main:/sys/class/pwm/pwmchip2/pwm0 $ echo 0 > enable
 ```
-
-#### Install Primary Node
-
-`pipx install --system-site-packages git+https://github.com/mgineer85/wigglecam.git`
-
-```sh .env.primary
-# enable clock generator on primary:
-primary_gpio__enable_primary_gpio="True"
-# primary is also preview display device:
-picamera2__enable_preview_display="True"
-```
-
-#### First start primary node
-
-`QT_QPA_PLATFORM=eglfs python -m node` or
-`QT_QPA_PLATFORM=eglfs wigglecam_node`
-
-### Secondary Nodes
-
-TODO
-
-#### Prepare Secondary Nodes
-
-```ini
-# rotate=0 because camera is upside down in case
-dtoverlay=imx708,rotation=0
-```
-
-#### Install Secondary Node
-
-`pipx install --system-site-packages git+https://github.com/mgineer85/wigglecam.git`
-
-```sh .env.node
-# likely empty...
-```
-
-#### First start secondary node
-
-`wigglecam_node`
