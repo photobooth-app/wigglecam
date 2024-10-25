@@ -31,7 +31,7 @@ sudo usermod --append --groups gpio $(whoami)
 sudo apt install -y python3-picamera2 python3-opencv python3-pip pipx
 pipx ensurepath # reboot afterwards!
 
-pipx install --system-site-packages git+https://github.com/mgineer85/wigglecam.git
+pipx install --system-site-packages git+https://github.com/photobooth-app/wigglecam.git
 ```
 
 #### Basic configuration
