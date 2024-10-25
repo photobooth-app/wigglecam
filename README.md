@@ -103,6 +103,30 @@ On the node with the display, there might be issues on startup QT complaining ab
 - `QT_QPA_PLATFORM=linuxfb wigglecam_minimal` or
 - `QT_QPA_PLATFORM=eglfs wigglecam_minimal`
 
+### Automatic Startup After Boot
+
+```ini
+[Unit]
+Description=wigglecam
+After=default.target
+
+[Service]
+Type=simple
+Restart=always
+WorkingDirectory=%h/ # used as datafolder!
+Environment="QT_QPA_PLATFORM=linuxfb"
+ExecStart=/home/pi/.local/bin/wigglecam_minimal # true for pipx install
+
+[Install]
+WantedBy=default.target
+```
+
+```sh
+systemctl --user daemon-reload
+systemctl --user enable wigglecam.service
+systemctl --user start wigglecam.service
+```
+
 ## Troubleshooting
 
 ### Test the Hardware PWM
