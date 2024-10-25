@@ -111,6 +111,8 @@ On the node with the display, there might be issues on startup QT complaining ab
 
 ### Automatic Startup After Boot
 
+Create following folder and file `~/.local/share/systemd/user/wigglecam.service` with content as follows:
+
 ```ini
 [Unit]
 Description=wigglecam
@@ -121,7 +123,8 @@ Type=simple
 Restart=always
 WorkingDirectory=%h/ # used as datafolder!
 Environment="QT_QPA_PLATFORM=linuxfb"
-ExecStart=/home/pi/.local/bin/wigglecam_minimal # true for pipx install
+#ExecStart=/home/pi/.local/bin/wigglecam_minimal # true for pipx install
+ExecStart=/home/pi/.local/bin/wigglecam_api # true for pipx install
 
 [Install]
 WantedBy=default.target
