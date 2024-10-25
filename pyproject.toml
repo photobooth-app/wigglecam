@@ -53,8 +53,7 @@ documentation = "https://github.com/mgineer85/photobooth-wigglecam"
 
 [project.scripts]
 wigglecam_minimal = "node.app_minimal:main"
-# wigglecam_uvicorn = "uvicorn node.__main__:app --host=0.0.0.0 --port=8000 --log-level=debug"
-# wigglify = "wigglify.cli:main"
+wigglecam_api = "node.app_api:main"
 
 [tool.pdm]
 version = { source = "file", path = "node/__version__.py" }

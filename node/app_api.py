@@ -4,6 +4,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
+import uvicorn
 from fastapi import FastAPI
 from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
 from fastapi.exceptions import HTTPException, RequestValidationError
@@ -46,7 +47,7 @@ def _create_app() -> FastAPI:
         title="Wigglecam Node API",
         description="API may change any time.",
         version=__version__,
-        contact={"name": "mgineer85", "url": "https://github.com/photobooth-app/photobooth-app", "email": "me@mgineer85.de"},
+        contact={"name": "mgineer85", "url": "https://github.com/photobooth-app/wigglecam", "email": "me@mgineer85.de"},
         docs_url="/api/doc",
         redoc_url=None,
         openapi_url="/api/openapi.json",
@@ -72,3 +73,19 @@ def _create_app() -> FastAPI:
 
 
 app = _create_app()
+
+
+def main():
+    # to allow api is runnable via project.scripts shortcut
+    # ref: https://stackoverflow.com/a/70393344
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=8000,
+        reload=False,
+        log_level="debug",
+    )
+
+
+if __name__ == "__main__":
+    main()
