@@ -36,7 +36,7 @@ class ConfigBackendPicamera2(BaseModel):
 class GroupBackend(BaseModel):
     active_backend: Literal["VirtualCamera", "Picamera2"] = Field(
         title="Active Backend",
-        default="VirtualCamera",
+        default="Picamera2",
         description="Backend to capture images from.",
     )
 
