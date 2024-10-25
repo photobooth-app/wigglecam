@@ -2,10 +2,10 @@
 
 Turn stereoscopic images into a wigglegram.
 
-![demo wigglegram](./assets/wigglegram-demo1.gif)
+![demo wigglegram](https://raw.githubusercontent.com/photobooth-app/wigglecam/main/assets/wigglegram-demo1.gif)
 
-![DIY wigglegram camera 3d printed](./assets/cam1.jpg)
-![DIY wigglegram camera 3d printed](./assets/cam2.jpg)
+![DIY wigglegram camera 3d printed](https://raw.githubusercontent.com/photobooth-app/wigglecam/main/assets/cam1.jpg)
+![DIY wigglegram camera 3d printed](https://raw.githubusercontent.com/photobooth-app/wigglecam/main/assets/cam2.jpg)
 
 🧪 This is experimental 🧪
 
