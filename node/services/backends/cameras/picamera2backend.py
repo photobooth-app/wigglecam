@@ -75,6 +75,8 @@ class Picamera2Backend(BaseBackend):
 
         if self._config.enable_preview_display:
             logger.info("starting display preview")
+            # INFO: QT catches the Ctrl-C listener, so the app is not shut down properly with the display enabled.
+            # use for testing purposes only!
             # Preview.DRM tested, but leads to many dropped frames.
             # Preview.QTGL currently not available on Pi3 according to own testing.
             # Preview.QT seems to work reasonably well, so use this for now hardcoded.
@@ -239,15 +241,19 @@ class Picamera2Backend(BaseBackend):
                     fixed_frame_duration = int(nominal_frame_duration_us - adjust_amount_clamped_us)
                     ctrl.FrameDurationLimits = (fixed_frame_duration,) * 2
 
-                logger.debug(
-                    f"clock_in={round((capture_time_assigned_timestamp_ns or 0)/1e6,1)} ms, "
-                    f"sensor_timestamp={round(picam_metadata['SensorTimestamp']/1e6,1)} ms, "
-                    f"adjust_cycle_counter={adjust_cycle_counter}, "
-                    f"delta={round((timestamp_delta)/1e6,1)} ms, "
-                    f"FrameDuration={round(picam_metadata['FrameDuration']/1e3,1)} ms "
-                    f"ExposureTime={round(picam_metadata['ExposureTime']/1e3,1)} ms "
-                    f"adjust_amount={round(adjust_amount_us/1e3,1)} ms "
-                    f"adjust_amount_clamped={round(adjust_amount_clamped_us/1e3,1)} ms "
-                )
+                if abs(timestamp_delta / 1.0e6) > 2.0:
+                    # even in debug reduce verbosity a bit if all is fine and within 2ms tolerance
+                    logger.debug(
+                        f"timestamp clk/sensor=({round((capture_time_assigned_timestamp_ns or 0)/1e6,1)}/"
+                        f"{round(picam_metadata['SensorTimestamp']/1e6,1)}) ms, "
+                        f"delta={round((timestamp_delta)/1e6,1)} ms, "
+                        f"adj_cycle_cntr={adjust_cycle_counter}, "
+                        f"adjust_amount={round(adjust_amount_us/1e3,1)} ms "
+                        f"adjust_amount_clamped={round(adjust_amount_clamped_us/1e3,1)} ms "
+                        f"FrameDuration={round(picam_metadata['FrameDuration']/1e3,1)} ms "
+                    )
+                else:
+                    pass
+                    # silent
 
         logger.info("_camera_fun left")
