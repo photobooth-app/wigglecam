@@ -38,7 +38,7 @@ jobs:
 
   tests-hardware-rpi:
     runs-on: [self-hosted, rpi]
-    if: ${{ github.repository_owner == 'mgineer85' }}
+    if: ${{ github.repository_owner == 'photobooth-app' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -54,16 +54,16 @@ jobs:
           name: coverage-hardware-rpi
           path: ./coverage.xml
 
-  # upload-to-codecov:
-  #   needs: [tests, tests-hardware-rpi]
-  #   runs-on: ubuntu-latest
-  #   if: ${{ github.repository_owner == 'mgineer85' }}
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v4
-  #     - name: Download artifacts
-  #       uses: actions/download-artifact@v4
-  #     - name: Upload to Codecov
-  #       uses: codecov/codecov-action@v4
-  #       with:
-  #         token: ${{ secrets.CODECOV_TOKEN }}
+  upload-to-codecov:
+    needs: [tests, tests-hardware-rpi]
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'photobooth-app' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
