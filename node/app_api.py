@@ -2,10 +2,7 @@
 
 import logging
 import os
-import signal
-import threading
 from contextlib import asynccontextmanager
-from types import FrameType
 
 from fastapi import FastAPI
 from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
@@ -29,31 +26,13 @@ def _create_basic_folders():
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    # workaround to free resources on shutdown and prevent stalling
-    # https://github.com/encode/uvicorn/issues/1579#issuecomment-1419635974
-
-    # start app
-    default_sigint_handler = signal.getsignal(signal.SIGINT)
-
-    def terminate_now(signum: int, frame: FrameType = None):
-        logger.info("shutting down app via signal handler")
-        container.stop()
-        default_sigint_handler(signum, frame)
-
-    if threading.current_thread() is not threading.main_thread():
-        # https://github.com/encode/uvicorn/pull/871
-        # Signals can only be listened to from the main thread.
-        # usually only during testing, but no need in testing for this.
-        logger.info("lifecycle hook not installing signal, because current_thread not main_thread")
-    else:
-        logger.info("lifecycle hook installing signal to handle app shutdown")
-        signal.signal(signal.SIGINT, terminate_now)
-
     # deliver app
     container.start()
+    logger.info("starting app")
     yield
     # Clean up
-    # container.stop()
+    logger.info("clean up")
+    container.stop()
 
 
 def _create_app() -> FastAPI:
@@ -64,11 +43,10 @@ def _create_app() -> FastAPI:
         raise RuntimeError(f"cannot create data folders, error: {exc}") from exc
 
     _app = FastAPI(
-        title="Photobooth-App API",
+        title="Wigglecam Node API",
         description="API may change any time.",
         version=__version__,
         contact={"name": "mgineer85", "url": "https://github.com/photobooth-app/photobooth-app", "email": "me@mgineer85.de"},
-        license_info={"name": "MIT", "url": "https://github.com/photobooth-app/photobooth-app/blob/main/LICENSE.md"},
         docs_url="/api/doc",
         redoc_url=None,
         openapi_url="/api/openapi.json",

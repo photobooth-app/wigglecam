@@ -1,9 +1,9 @@
 import logging
 
-from .config import appconfig
 from .services.baseservice import BaseService
-from .services.gpio_primary_clockwork import GpioPrimaryClockworkService
-from .services.sync_aquisition_service import SyncedAcquisitionService
+from .services.config import appconfig
+from .services.loggingservice import LoggingService
+from .services.sync_acquisition_service import SyncedAcquisitionService
 
 logger = logging.getLogger(__name__)
 
@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 # and as globals module:
 class Container:
     # container
-    gpio_primary_service = GpioPrimaryClockworkService(config=appconfig.primary_gpio)
-    synced_acquisition_service = SyncedAcquisitionService()
+    logging_service = LoggingService(config=appconfig.logging)
+    synced_acquisition_service = SyncedAcquisitionService(config=appconfig.syncedacquisition)
 
     def _service_list(self) -> list[BaseService]:
         # list used to start/stop services. List sorted in the order of definition.

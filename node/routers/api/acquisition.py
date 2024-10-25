@@ -7,8 +7,8 @@ from ...container import container
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
-    prefix="/aquisition",
-    tags=["aquisition"],
+    prefix="/acquisition",
+    tags=["acquisition"],
 )
 
 
@@ -33,12 +33,12 @@ def video_stream():
 
 @router.get("/setup")
 def setup_job(job_id, number_captures):
-    pass
+    container.synced_acquisition_service.setup_job()
 
 
 @router.get("/trigger")
 def trigger_job(job_id):
-    pass
+    container.synced_acquisition_service.execute_job()
 
 
 @router.get("/results")

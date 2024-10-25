@@ -3,7 +3,7 @@ from datetime import datetime
 from pydantic import PrivateAttr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .models import ConfigGpioPrimaryClockwork, ConfigGpioSecondaryNode, ConfigPicamera2
+from .models import ConfigBackendGpio, ConfigBackendPicamera2, ConfigLogging, ConfigSyncedAcquisition
 
 
 class AppConfig(BaseSettings):
@@ -23,9 +23,10 @@ class AppConfig(BaseSettings):
     _processed_at: datetime = PrivateAttr(default_factory=datetime.now)  # private attributes
 
     # groups -> setting items
-    primary_gpio: ConfigGpioPrimaryClockwork = ConfigGpioPrimaryClockwork()
-    secondary_gpio: ConfigGpioSecondaryNode = ConfigGpioSecondaryNode()
-    picamera2: ConfigPicamera2 = ConfigPicamera2()
+    logging: ConfigLogging = ConfigLogging()
+    syncedacquisition: ConfigSyncedAcquisition = ConfigSyncedAcquisition()
+    backend_gpio: ConfigBackendGpio = ConfigBackendGpio()
+    backend_picamera2: ConfigBackendPicamera2 = ConfigBackendPicamera2()
 
     model_config = SettingsConfigDict(
         env_file_encoding="utf-8",

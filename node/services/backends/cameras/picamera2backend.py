@@ -10,7 +10,7 @@ from picamera2 import Picamera2, Preview
 from picamera2.encoders import MJPEGEncoder
 from picamera2.outputs import FileOutput
 
-from ....config.models import ConfigPicamera2
+from ...config.models import ConfigBackendPicamera2
 from .backend import BaseBackend, StreamingOutput
 
 logger = logging.getLogger(__name__)
@@ -20,10 +20,10 @@ ADJUST_EVERY_X_CYCLE = 8
 
 
 class Picamera2Backend(BaseBackend):
-    def __init__(self, config: ConfigPicamera2):
+    def __init__(self, config: ConfigBackendPicamera2):
         super().__init__()
         # init with arguments
-        self._config: ConfigPicamera2 = config
+        self._config: ConfigBackendPicamera2 = config
 
         # private props
         self._picamera2: Picamera2 = None
@@ -38,7 +38,7 @@ class Picamera2Backend(BaseBackend):
         self._capture = Event()
         self._streaming_output: StreamingOutput = StreamingOutput()
 
-        print(f"global_camera_info {Picamera2.global_camera_info()}")
+        logger.info(f"global_camera_info {Picamera2.global_camera_info()}")
 
     def start(self, nominal_framerate: int = None):
         """To start the backend, configure picamera2"""
@@ -74,7 +74,7 @@ class Picamera2Backend(BaseBackend):
         self._picamera2.options["quality"] = self._config.original_still_quality  # capture_file image quality
 
         if self._config.enable_preview_display:
-            print("starting display preview")
+            logger.info("starting display preview")
             # Preview.DRM tested, but leads to many dropped frames.
             # Preview.QTGL currently not available on Pi3 according to own testing.
             # Preview.QT seems to work reasonably well, so use this for now hardcoded.
@@ -84,7 +84,12 @@ class Picamera2Backend(BaseBackend):
             # self._qpicamera2 = QPicamera2(self._picamera2, width=800, height=480, keep_ar=True)
         else:
             pass
+            logger.info("preview disabled in config")
             # null Preview is automatically initialized and it needs at least one preview to drive the camera
+
+        # at this point we can receive the framedurationlimits valid for the selected configuration
+        # -> use to validate mode is possible, error if not possible, warn if very close
+        self._check_framerate()
 
         # start camera
         self._picamera2.start()
@@ -98,7 +103,7 @@ class Picamera2Backend(BaseBackend):
         logger.info(f"camera_controls: {self._picamera2.camera_controls}")
         logger.info(f"controls: {self._picamera2.controls}")
         logger.info(f"camera_properties: {self._picamera2.camera_properties}")
-        print(f"nominal framerate set to {self._nominal_framerate}")
+        logger.info(f"nominal framerate set to {self._nominal_framerate}")
         logger.debug(f"{self.__module__} started")
 
     def stop(self):
@@ -117,11 +122,11 @@ class Picamera2Backend(BaseBackend):
         # low power devices but this can cause issues with timing it seems and permanent non-synchronizity
 
         self._picamera2.start_recording(encoder, FileOutput(self._streaming_output))
-        print("encoding stream started")
+        logger.info("encoding stream started")
 
     def stop_stream(self):
         self._picamera2.stop_recording()
-        print("encoding stream stopped")
+        logger.info("encoding stream stopped")
 
     def wait_for_lores_image(self):
         """for other threads to receive a lores JPEG image"""
@@ -138,7 +143,23 @@ class Picamera2Backend(BaseBackend):
         try:
             self._queue_timestamp_monotonic_ns.put_nowait(timestamp_ns)
         except Full:
-            print("could not queue timestamp - camera not started or too low for nominal fps rate?")
+            logger.info("could not queue timestamp - camera not started, busy or nominal fps to close to cameras max mode fps?")
+
+    def _check_framerate(self):
+        assert self._nominal_framerate is not None
+
+        framedurationlimits = self._picamera2.camera_controls["FrameDurationLimits"][:2]  # limits is in µs (min,max)
+        fpslimits = tuple([round(1.0 / (val * 1.0e-6), 1) for val in framedurationlimits])  # converted to frames per second fps
+
+        logger.info(f"min frame duration {framedurationlimits[0]}, max frame duration {framedurationlimits[1]}")
+        logger.info(f"max fps {fpslimits[0]}, min fps {fpslimits[1]}")
+
+        if self._nominal_framerate >= fpslimits[0] or self._nominal_framerate <= fpslimits[1]:
+            raise RuntimeError("nominal framerate is out of camera limits!")
+
+        WARNING_THRESHOLD = 0.1
+        if self._nominal_framerate > (fpslimits[0] * (1 - WARNING_THRESHOLD)) or self._nominal_framerate < fpslimits[1] * (1 + WARNING_THRESHOLD):
+            logger.warning("nominal framerate is close to cameras capabilities, this might have effect on sync performance!")
 
     def _init_autofocus(self):
         """
@@ -163,7 +184,7 @@ class Picamera2Backend(BaseBackend):
         return max(min_value, min(n, max_value))
 
     def _camera_fun(self):
-        print("starting _camera_fun")
+        logger.debug("starting _camera_fun")
         timestamp_delta = 0
         adjust_cycle_counter = 0
         adjust_amount_us = 0
@@ -174,14 +195,17 @@ class Picamera2Backend(BaseBackend):
         while self._is_running:
             if self._capture.is_set():
                 self._capture.clear()
-                print("####### capture #######")
+                logger.info("####### capture #######")
 
                 folder = Path("./tmp/")
                 filename = Path(f"img_{datetime.now().astimezone().strftime('%Y%m%d-%H%M%S-%f')}")
                 filepath = folder / filename
-                print(f"{filepath=}")
+                logger.info(f"{filepath=}")
 
-                print(f"delta right before capture is {round(timestamp_delta/1e6,1)} ms")
+                if abs(timestamp_delta / 1.0e6) > 1.0:
+                    logger.warning(f"camera captured out of sync, delta is {round(timestamp_delta/1e6,1)} ms for this frame")
+                else:
+                    logger.info(f"delta right before capture is {round(timestamp_delta/1e6,1)} ms")
 
                 tms = time.time()
                 # take pick like following line leads to stalling in camera thread. the below method seems to have no effect on picam's cam thread
@@ -191,7 +215,7 @@ class Picamera2Backend(BaseBackend):
                 request.save("main", filepath.with_suffix(".jpg"))
                 request.release()
 
-                print(f"####### capture end, took {round((time.time() - tms), 2)}s #######")
+                logger.info(f"####### capture end, took {round((time.time() - tms), 2)}s #######")
             else:
                 job = self._picamera2.capture_request(wait=False)
                 # TODO: error checking, recovering from timeouts
@@ -215,7 +239,7 @@ class Picamera2Backend(BaseBackend):
                     fixed_frame_duration = int(nominal_frame_duration_us - adjust_amount_clamped_us)
                     ctrl.FrameDurationLimits = (fixed_frame_duration,) * 2
 
-                print(
+                logger.debug(
                     f"clock_in={round((capture_time_assigned_timestamp_ns or 0)/1e6,1)} ms, "
                     f"sensor_timestamp={round(picam_metadata['SensorTimestamp']/1e6,1)} ms, "
                     f"adjust_cycle_counter={adjust_cycle_counter}, "
@@ -226,8 +250,4 @@ class Picamera2Backend(BaseBackend):
                     f"adjust_amount_clamped={round(adjust_amount_clamped_us/1e3,1)} ms "
                 )
 
-        print("_camera_fun left")
-
-
-if __name__ == "__main__":
-    print("should not be started directly")
+        logger.info("_camera_fun left")
