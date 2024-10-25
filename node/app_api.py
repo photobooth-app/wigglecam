@@ -68,15 +68,31 @@ app = _create_app()
 
 
 def main():
-    # to allow api is runnable via project.scripts shortcut
+    # main function to allow api is runnable via project.scripts shortcut
     # ref: https://stackoverflow.com/a/70393344
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=8000,
-        reload=False,
-        log_level="debug",
+    server = uvicorn.Server(
+        uvicorn.Config(
+            app,
+            host="0.0.0.0",
+            port=8000,
+            reload=False,
+            log_level="debug",
+        )
     )
+
+    # shutdown app workaround:
+    # workaround until https://github.com/encode/uvicorn/issues/1579 is fixed and
+    # shutdown can be handled properly.
+    # Otherwise the stream.mjpg if open will block shutdown of the server
+    # signal CTRL-C and systemctl stop would have no effect, app stalls
+    # signal.signal(signal.SIGINT, signal_handler) and similar
+    # don't work, because uvicorn is eating up signal handler
+    # currently: https://github.com/encode/uvicorn/issues/1579
+    # the workaround: currently we set force_exit to True to shutdown the server
+    server.force_exit = True  # leads to many exceptions on shutdown, but ... it is what it is...
+
+    # run
+    server.run()
 
 
 if __name__ == "__main__":

@@ -54,7 +54,7 @@ class SyncedAcquisitionService(BaseService):
         super().start()
 
         self._camera_backend: AbstractBackend = self._import_backend(self._config.backends.active_backend)(
-            getattr(self._config.backends, str((self._config.backends.active_backend).lower()))
+            getattr(self._config.backends, str(self._config.backends.active_backend).lower())
         )
 
         self._gpio_backend.start()

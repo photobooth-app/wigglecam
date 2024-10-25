@@ -29,12 +29,30 @@ class AbstractBackend(ABC):
     def __repr__(self):
         return f"{self.__class__}"
 
-    def start(self):
+    @abstractmethod
+    def start(self, nominal_framerate: int = None):
         self._is_running: bool = True
 
+    @abstractmethod
     def stop(self):
         self._is_running: bool = False
 
     @abstractmethod
-    def test(self):
+    def start_stream(self):
+        pass
+
+    @abstractmethod
+    def stop_stream(self):
+        pass
+
+    @abstractmethod
+    def wait_for_lores_image(self):
+        pass
+
+    @abstractmethod
+    def do_capture(self, filename: str = None, number_frames: int = 1):
+        pass
+
+    @abstractmethod
+    def sync_tick(self, timestamp_ns: int):
         pass
