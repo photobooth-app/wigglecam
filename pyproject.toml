@@ -38,12 +38,12 @@ dependencies = [
     "pillow>=10.0.0",
     "fastapi",
     "uvicorn",
+    "numpy>=2.0.0",
 ]
 
 [project.optional-dependencies]
 wigglify = [
   "opencv-python>=4.8.1",
-  "numpy>=2.0.0",
 ]
 
 [project.urls]
