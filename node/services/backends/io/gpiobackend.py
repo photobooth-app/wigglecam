@@ -72,16 +72,19 @@ class GpioSecondaryNodeService:
         Returns:
             int: _description_
         """
+        timestamps_ns = []
+        COUNT_INTERVALS=10
         try:
-            first_timestamp_ns = self.wait_for_clock_rise_signal(timeout=1)
-            for _ in range(10):
-                last_timestamp_ns = self.wait_for_clock_rise_signal(timeout=1)
+            for _ in range(COUNT_INTERVALS+1):  # 11 ticks mean 10 intervals between ticks, we want the intervals.
+                timestamps_ns.append(self.wait_for_clock_rise_signal(timeout=1))
         except TimeoutError as exc:
             raise RuntimeError("no clock, cannot derive nominal framerate!") from exc
         else:
-            duration_10_ticks_s = (last_timestamp_ns - first_timestamp_ns) * 1.0e-9
-            duration_1_tick_s = duration_10_ticks_s / 10.0  # duration for 1_tick
+            duration_summed_ticks_s = (timestamps_ns[COUNT_INTERVALS] - timestamps_ns[0]) * 1.0e-9
+            duration_1_tick_s = duration_summed_ticks_s / (len(timestamps_ns) - 1)  # duration for 1_tick
             fps = round(1.0 / duration_1_tick_s)  # fps because fMaster=fCamera*1.0 currently
+
+            #TODO: calculate jitter for stats and information purposes
 
             return fps
 
