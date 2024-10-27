@@ -168,7 +168,16 @@ class SyncedAcquisitionService(BaseService):
                 derived_fps = self._gpio_backend.derive_nominal_framerate_from_clock()
                 logger.info(f"got it, derived {derived_fps}fps...")
 
-                self._device_start(derived_fps)
+                try:
+                    self._device_start(derived_fps)
+                except Exception as exc:
+                    logger.exception(exc)
+                    logger.error(f"error starting device: {exc}")
+
+                    self._device_stop()  # stop which sets device_is_running flag to false so supervisor could restart again.
+
+                    time.sleep(2)  # just do not try too often...
+
             else:
                 time.sleep(1)
 
