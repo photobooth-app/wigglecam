@@ -1,5 +1,6 @@
 import argparse
 import logging
+import sys
 import time
 
 from gpiozero import Button as ZeroButton
@@ -26,10 +27,10 @@ class Button(ZeroButton):
             self._fire_events(self.pin_factory.ticks(), False)
 
 
-def main():
+def main(args=None, run: bool = True):
     from .container import container
 
-    args = parser.parse_args()  # parse here, not above because pytest system exit 2
+    args = parser.parse_args(args)  # parse here, not above because pytest system exit 2
 
     try:
         create_basic_folders()
@@ -48,7 +49,7 @@ def main():
     logger.info(f"external trigger button on {_shutterbutton_in}")
 
     try:
-        while True:
+        while run:  # for pytest
             time.sleep(1)
 
     except KeyboardInterrupt:
@@ -60,4 +61,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main(args=sys.argv[1:]))  # for testing

@@ -18,9 +18,9 @@ def test_app():
 
 
 def test_main_instance():
-    pass
+    import node.app_api
 
-    # node.app_api.main() # cannot test as the server will stall forever?
+    node.app_api.main(False)
 
 
 def test_main_instance_create_dirs_permission_error():

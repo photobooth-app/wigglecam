@@ -67,7 +67,7 @@ def _create_app() -> FastAPI:
 app = _create_app()
 
 
-def main():
+def main(run_server: bool = True):
     # main function to allow api is runnable via project.scripts shortcut
     # ref: https://stackoverflow.com/a/70393344
     server = uvicorn.Server(
@@ -92,7 +92,8 @@ def main():
     server.force_exit = True  # leads to many exceptions on shutdown, but ... it is what it is...
 
     # run
-    server.run()
+    if run_server:  # for pytest
+        server.run()
 
 
 if __name__ == "__main__":
