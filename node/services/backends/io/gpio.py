@@ -102,7 +102,7 @@ class GpioBackend(AbstractIoBackend):
         """
         PWM_CHANNEL = self._config.pwm_channel
         PERIOD = int(1.0 / self._config.fps_nominal * 1e9)  # 1e9=ns
-        DUTY_CYCLE = PERIOD // 2  # //16 2==50% duty, 16=6,25%
+        DUTY_CYCLE = PERIOD // 16  # //2==50% duty, 16=6,25% # TODO: validate - maybe due to fixed timing 16 leaves more time to draw on display?
         PWM_SYSFS = Path(f"/sys/class/pwm/{self._config.pwmchip}")
 
         if not PWM_SYSFS.is_dir():
