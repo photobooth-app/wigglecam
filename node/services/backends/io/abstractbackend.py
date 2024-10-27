@@ -35,7 +35,7 @@ class AbstractIoBackend(ABC):
         pass
 
     @abstractmethod
-    def trigger(self, on: bool):
+    def set_trigger_out(self, on: bool):
         # forward to output trigger
         pass
 

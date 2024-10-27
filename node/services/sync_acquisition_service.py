@@ -231,17 +231,18 @@ class SyncedAcquisitionService(BaseService):
             if self._flag_execute_job.wait(timeout=1):
                 # first clear to avoid endless loops
                 self._flag_execute_job.clear()
+                logger.info("executing job")
                 # timeout=anything so it doesnt block shutdown. If flag is set during timeout it will be catched during next run and is not lost
                 # there is a job that shall be processed, now wait until we get a falling clock
                 # timeout not None (to avoid blocking) but longer than any frame could ever take
                 self._gpio_backend.wait_for_clock_fall_signal(timeout=1)
                 # clock is fallen, this is the sync point to send out trigger to other clients. chosen to send on falling clock because capture
                 # shall be on rising clock and this is with 1/2 frame distance far enough that all clients can prepare to capture
-                self._gpio_backend.trigger(True)  # clients detect rising edge on trigger_in and invoke capture.
+                self._gpio_backend.set_trigger_out(True)  # clients detect rising edge on trigger_in and invoke capture.
                 # now we wait until next falling clock and turn off the trigger
                 # timeout not None (to avoid blocking) but longer than any frame could ever take
                 self._gpio_backend.wait_for_clock_fall_signal(timeout=1)
-                self._gpio_backend.trigger(False)
+                self._gpio_backend.set_trigger_out(False)
                 # done, restart waiting for flag...
             else:
                 pass

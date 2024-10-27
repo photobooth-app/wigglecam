@@ -12,15 +12,15 @@ class ConfigBackendVirtualIo(BaseModel):
 
 
 class ConfigBackendGpio(BaseModel):
-    chip: str = Field(default="/dev/gpiochip0")
     clock_in_pin_name: str = Field(default="GPIO14")
     trigger_in_pin_name: str = Field(default="GPIO15")
-    trigger_out_pin_name: str = Field(default="GPIO17")
 
-    enable_clock: bool = Field(default=False)
+    is_primary: bool = Field(default=False)
     fps_nominal: int = Field(default=9)  # needs to be lower than cameras mode max fps to allow for control reserve
+    chip: str = Field(default="/dev/gpiochip0")
     pwmchip: str = Field(default="pwmchip2")  # pi5: pwmchip2, other pwmchip0
     pwm_channel: int = Field(default=2)  # pi5: 2, other 0
+    trigger_out_pin_name: str = Field(default="GPIO17")
 
 
 class ConfigBackendVirtualCamera(BaseModel):

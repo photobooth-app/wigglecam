@@ -41,6 +41,10 @@ On all systems edit `/boot/firmware/config.txt` as follows:
 ```ini
 # add to all section
 [all]
+# disable UART because it would interfere with the clock and trigger events on GPIO14/15 detected as event in the app
+enable_uart=0
+# REMOVE or comment any of the following in the file:
+# console=serial0,115200
 
 # camera
 # rotate=0 because camera is upside down in case
@@ -57,8 +61,6 @@ dtoverlay=vc4-kms-dsi-waveshare-800x480,invx,invy #https://github.com/raspberryp
 dtparam=audio=off # because GPIO18 interferes with audio
 dtoverlay=pwm,pin=18,func=2 # GPIO18 reserved for hardware pwm
 
-
-# 
 
 # shutdown button signal
 # TODO

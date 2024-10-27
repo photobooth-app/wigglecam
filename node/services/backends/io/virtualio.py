@@ -28,7 +28,8 @@ class VirtualIoBackend(AbstractIoBackend):
     def derive_nominal_framerate_from_clock(self) -> int:
         return self._config.fps_nominal
 
-    def trigger(self, on: bool):
+    def set_trigger_out(self, on: bool):
+        # trigger out is forwarded in virtual mode directly to trigger in again
         if on:
             self._on_trigger_in()
 

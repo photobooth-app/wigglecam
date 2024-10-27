@@ -35,15 +35,16 @@ class GpioBackend(AbstractIoBackend):
     def start(self):
         super().start()
 
-        if self._config.enable_clock:
+        if self._config.is_primary:
             logger.info("loading primary clockwork service")
             self._set_hardware_clock(enable=True)
             logger.info("generating clock using hardware pwm overlay")
+
+            self._trigger_out = DigitalOutputDevice(pin=self._config.trigger_out_pin_name, initial_value=False, active_high=True)
+            logger.info(f"forward trigger_out on {self._trigger_out}")
         else:
             logger.info("skipped loading primary clockwork service because disabled in config")
-
-        self._trigger_out = DigitalOutputDevice(pin=self._config.trigger_out_pin_name, initial_value=False, active_high=True)
-        logger.info(f"forward trigger_out on {self._trigger_out}")
+            logger.info("skipped enabling trigger_out because disabled in config, trigger out should be enabled on primary node usually only.")
 
         self._gpio_thread = Thread(name="_gpio_thread", target=self._gpio_fun, args=(), daemon=True)
         self._gpio_thread.start()
@@ -53,7 +54,7 @@ class GpioBackend(AbstractIoBackend):
     def stop(self):
         super().stop()
 
-        if self._config.enable_clock:
+        if self._config.is_primary:
             self._set_hardware_clock(enable=False)
 
         if self._trigger_out:
@@ -82,7 +83,11 @@ class GpioBackend(AbstractIoBackend):
 
             return fps
 
-    def trigger(self, on: bool):
+    def set_trigger_out(self, on: bool):
+        if not self._trigger_out:
+            logger.debug("trigger requested to forward on this device but disabled in config!")
+            return
+
         if on:
             self._trigger_out.on()
         else:
