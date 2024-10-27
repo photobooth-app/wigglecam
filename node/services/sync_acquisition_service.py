@@ -6,10 +6,9 @@ from importlib import import_module
 from pathlib import Path
 from threading import Event, Thread
 
-from .backends.cameras.abstractbackend import AbstractBackend
-from .backends.io.gpiobackend import GpioSecondaryNodeService
+from .backends.cameras.abstractbackend import AbstractCameraBackend
+from .backends.io.abstractbackend import AbstractIoBackend
 from .baseservice import BaseService
-from .config import appconfig
 from .config.models import ConfigSyncedAcquisition
 
 logger = logging.getLogger(__name__)
@@ -36,8 +35,8 @@ class SyncedAcquisitionService(BaseService):
 
         # define private props
         # to sync, a camera backend and io backend is used.
-        self._camera_backend: AbstractBackend = None
-        self._gpio_backend: GpioSecondaryNodeService = None
+        self._camera_backend: AbstractCameraBackend = None
+        self._gpio_backend: AbstractIoBackend = None
         self._sync_thread: Thread = None
         self._capture_thread: Thread = None
         self._trigger_thread: Thread = None
@@ -46,16 +45,20 @@ class SyncedAcquisitionService(BaseService):
         self._flag_execute_job: Event = None
 
         # initialize private properties.
-        # currently only picamera2 and gpio backend are supported, may be extended in the future
-        self._gpio_backend: GpioSecondaryNodeService = GpioSecondaryNodeService(appconfig.backend_gpio)
         self._flag_execute_job: Event = Event()
 
     def start(self):
         super().start()
 
-        self._camera_backend: AbstractBackend = self._import_backend(self._config.backends.active_backend)(
-            getattr(self._config.backends, str(self._config.backends.active_backend).lower())
+        self._gpio_backend: AbstractIoBackend = self._import_backend("io", self._config.io_backends.active_backend)(
+            getattr(self._config.io_backends, str(self._config.io_backends.active_backend).lower())
         )
+        logger.debug(f"loaded {self._gpio_backend}")
+
+        self._camera_backend: AbstractCameraBackend = self._import_backend("cameras", self._config.camera_backends.active_backend)(
+            getattr(self._config.camera_backends, str(self._config.camera_backends.active_backend).lower())
+        )
+        logger.debug(f"loaded {self._camera_backend}")
 
         self._gpio_backend.start()
 
@@ -67,15 +70,16 @@ class SyncedAcquisitionService(BaseService):
     def stop(self):
         super().stop()
 
-        self._gpio_backend.stop()
+        if self._gpio_backend:
+            self._gpio_backend.stop()
 
         logger.debug(f"{self.__module__} stopped")
 
     @staticmethod
-    def _import_backend(backend: str):
+    def _import_backend(package: str, backend: str):
         # dynamic import of backend
 
-        module_path = f".backends.cameras.{backend.lower()}"
+        module_path = f".backends.{package.lower()}.{backend.lower()}"
         class_name = f"{backend}Backend"
         pkg = ".".join(__name__.split(".")[:-1])  # to allow relative imports
 
@@ -121,6 +125,8 @@ class SyncedAcquisitionService(BaseService):
     def _device_start(self, derived_fps: int):
         self._device_is_running = True
 
+        logger.info("starting device")
+
         self._camera_backend.start(nominal_framerate=derived_fps)
 
         self._sync_thread = Thread(name="_sync_thread", target=self._sync_fun, args=(), daemon=True)
@@ -129,6 +135,8 @@ class SyncedAcquisitionService(BaseService):
         self._capture_thread.start()
         self._trigger_thread = Thread(name="_trigger_thread", target=self._trigger_fun, args=(), daemon=True)
         self._trigger_thread.start()
+
+        logger.info("device started")
 
     def _device_stop(self):
         self._device_is_running = False
@@ -179,6 +187,15 @@ class SyncedAcquisitionService(BaseService):
             else:
                 self._camera_backend.sync_tick(timestamp_ns)
 
+            try:
+                self._gpio_backend.wait_for_clock_fall_signal(timeout=1)
+            except TimeoutError:
+                # stop devices when no clock is avail, supervisor enables again after clock is received, derives new framerate ans starts backends
+                logger.error("no clock signal received within timeout! stopping devices.")
+                self._device_stop()
+            else:
+                self._camera_backend.request_tick()
+
     def _capture_fun(self):
         while self._device_is_running:
             self._gpio_backend.wait_for_trigger_signal(timeout=None)
@@ -189,8 +206,13 @@ class SyncedAcquisitionService(BaseService):
                 self._job = CaptureJob()
 
             if self._job:
-                self._camera_backend.do_capture(self._job.id, self._job.number_captures)
-                self._job = None
+                try:
+                    self._camera_backend.do_capture(self._job.id, self._job.number_captures)
+                except Exception as exc:
+                    logger.exception(exc)
+                    logger.critical(f"error during capture: {exc}")
+                finally:
+                    self._job = None
             else:
                 logger.warning("capture request ignored because no job set!")
 
@@ -206,11 +228,11 @@ class SyncedAcquisitionService(BaseService):
                 self._gpio_backend.wait_for_clock_fall_signal(timeout=1)
                 # clock is fallen, this is the sync point to send out trigger to other clients. chosen to send on falling clock because capture
                 # shall be on rising clock and this is with 1/2 frame distance far enough that all clients can prepare to capture
-                self._gpio_backend._trigger_out.on()  # clients detect rising edge on trigger_in and invoke capture.
+                self._gpio_backend.trigger(True)  # clients detect rising edge on trigger_in and invoke capture.
                 # now we wait until next falling clock and turn off the trigger
                 # timeout not None (to avoid blocking) but longer than any frame could ever take
                 self._gpio_backend.wait_for_clock_fall_signal(timeout=1)
-                self._gpio_backend._trigger_out.off()
+                self._gpio_backend.trigger(False)
                 # done, restart waiting for flag...
             else:
                 pass

@@ -7,6 +7,10 @@ class ConfigLogging(BaseModel):
     level: str = Field(default="DEBUG")
 
 
+class ConfigBackendVirtualIo(BaseModel):
+    fps_nominal: int = Field(default=5)  # needs to be lower than cameras mode max fps to allow for control reserve
+
+
 class ConfigBackendGpio(BaseModel):
     chip: str = Field(default="/dev/gpiochip0")
     clock_in_pin_name: str = Field(default="GPIO14")
@@ -19,7 +23,7 @@ class ConfigBackendGpio(BaseModel):
     pwm_channel: int = Field(default=2)  # pi5: 2, other 0
 
 
-class ConfigBackendVirtualcamera(BaseModel):
+class ConfigBackendVirtualCamera(BaseModel):
     pass  # nothing to configure
 
 
@@ -33,17 +37,30 @@ class ConfigBackendPicamera2(BaseModel):
     original_still_quality: int = Field(default=90)
 
 
-class GroupBackend(BaseModel):
+class GroupCameraBackend(BaseModel):
     active_backend: Literal["VirtualCamera", "Picamera2"] = Field(
         title="Active Backend",
         default="Picamera2",
         description="Backend to capture images from.",
     )
 
-    virtualcamera: ConfigBackendVirtualcamera = ConfigBackendVirtualcamera()
+    virtualcamera: ConfigBackendVirtualCamera = ConfigBackendVirtualCamera()
     picamera2: ConfigBackendPicamera2 = ConfigBackendPicamera2()
+
+
+class GroupIoBackend(BaseModel):
+    active_backend: Literal["VirtualIo", "Gpio"] = Field(
+        title="Active Backend",
+        default="Gpio",
+        description="Backend to use synchronize camera to.",
+    )
+
+    virtualio: ConfigBackendVirtualIo = ConfigBackendVirtualIo()
+    gpio: ConfigBackendGpio = ConfigBackendGpio()
 
 
 class ConfigSyncedAcquisition(BaseModel):
     allow_standalone_job: bool = Field(default=True)
-    backends: GroupBackend = Field(default=GroupBackend())
+
+    camera_backends: GroupCameraBackend = Field(default=GroupCameraBackend())
+    io_backends: GroupIoBackend = Field(default=GroupIoBackend())

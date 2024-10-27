@@ -1,6 +1,10 @@
 import io
+import logging
 from abc import ABC, abstractmethod
-from threading import Condition
+from queue import Full, Queue
+from threading import Condition, Event
+
+logger = logging.getLogger(__name__)
 
 
 class StreamingOutput(io.BufferedIOBase):
@@ -21,10 +25,20 @@ class StreamingOutput(io.BufferedIOBase):
             self.condition.notify_all()
 
 
-class AbstractBackend(ABC):
+class AbstractCameraBackend(ABC):
     def __init__(self):
         # used to abort threads when service is stopped.
         self._is_running: bool = None
+
+        # declare common abstract props
+        self._nominal_framerate: int = None
+        self._queue_timestamp_monotonic_ns: Queue = None
+        self._event_request_tick: Event = None
+        self._capture: Event = None
+
+        # init common abstract props
+        self._event_request_tick: Event = Event()
+        self._capture = Event()
 
     def __repr__(self):
         return f"{self.__class__}"
@@ -33,9 +47,28 @@ class AbstractBackend(ABC):
     def start(self, nominal_framerate: int = None):
         self._is_running: bool = True
 
+        if not nominal_framerate:
+            # if 0 or None, fail!
+            raise RuntimeError("nominal framerate needs to be given!")
+
+        self._nominal_framerate = nominal_framerate
+        self._queue_timestamp_monotonic_ns: Queue = Queue(maxsize=1)
+
     @abstractmethod
     def stop(self):
         self._is_running: bool = False
+
+    def do_capture(self, filename: str = None, number_frames: int = 1):
+        self._capture.set()
+
+    def sync_tick(self, timestamp_ns: int):
+        try:
+            self._queue_timestamp_monotonic_ns.put_nowait(timestamp_ns)
+        except Full:
+            logger.info("could not queue timestamp - camera not started, busy or nominal fps to close to cameras max mode fps?")
+
+    def request_tick(self):
+        self._event_request_tick.set()
 
     @abstractmethod
     def start_stream(self):
@@ -47,12 +80,4 @@ class AbstractBackend(ABC):
 
     @abstractmethod
     def wait_for_lores_image(self):
-        pass
-
-    @abstractmethod
-    def do_capture(self, filename: str = None, number_frames: int = 1):
-        pass
-
-    @abstractmethod
-    def sync_tick(self, timestamp_ns: int):
         pass

@@ -2,18 +2,21 @@ import logging
 import os
 import time
 from pathlib import Path
-from threading import Condition, Thread
+from threading import Thread
 
 import gpiod
 from gpiozero import DigitalOutputDevice
 
 from ...config.models import ConfigBackendGpio
+from .abstractbackend import AbstractIoBackend
 
 logger = logging.getLogger(__name__)
 
 
-class GpioSecondaryNodeService:
+class GpioBackend(AbstractIoBackend):
     def __init__(self, config: ConfigBackendGpio):
+        super().__init__()
+
         # init with arguments
         self._config: ConfigBackendGpio = config
 
@@ -21,10 +24,6 @@ class GpioSecondaryNodeService:
         self._gpiod_chip = None
         self._gpiod_clock_in = None
         self._gpiod_trigger_in = None
-        self._clock_rise_in_condition: Condition = None
-        self._clock_fall_in_condition: Condition = None
-        self._trigger_in_condition: Condition = None
-        self._clock_in_timestamp_ns = None
         self._gpio_thread: Thread = None
         self._trigger_out: DigitalOutputDevice = None
 
@@ -32,14 +31,13 @@ class GpioSecondaryNodeService:
         self._gpiod_chip = gpiod.Chip(self._config.chip)
         self._gpiod_clock_in = gpiod.find_line(self._config.clock_in_pin_name).offset()
         self._gpiod_trigger_in = gpiod.find_line(self._config.trigger_in_pin_name).offset()
-        self._clock_rise_in_condition: Condition = Condition()
-        self._clock_fall_in_condition: Condition = Condition()
-        self._trigger_in_condition: Condition = Condition()
 
     def start(self):
+        super().start()
+
         if self._config.enable_clock:
             logger.info("loading primary clockwork service")
-            self.set_hardware_clock(enable=True)
+            self._set_hardware_clock(enable=True)
             logger.info("generating clock using hardware pwm overlay")
         else:
             logger.info("skipped loading primary clockwork service because disabled in config")
@@ -53,17 +51,13 @@ class GpioSecondaryNodeService:
         logger.debug(f"{self.__module__} started")
 
     def stop(self):
+        super().stop()
+
         if self._config.enable_clock:
-            self.set_hardware_clock(enable=False)
+            self._set_hardware_clock(enable=False)
 
         if self._trigger_out:
             self._trigger_out.close()
-
-    def clock_signal_valid(self) -> bool:
-        TIMEOUT_CLOCK_SIGNAL_INVALID = 0.5 * 1e9  # 0.5sec
-        if not self._clock_in_timestamp_ns:
-            return False
-        return (time.monotonic_ns() - self._clock_in_timestamp_ns) < TIMEOUT_CLOCK_SIGNAL_INVALID
 
     def derive_nominal_framerate_from_clock(self) -> int:
         """calc the framerate derived by monitoring the clock signal for 11 ticks (means 10 intervals).
@@ -73,9 +67,9 @@ class GpioSecondaryNodeService:
             int: _description_
         """
         timestamps_ns = []
-        COUNT_INTERVALS=10
+        COUNT_INTERVALS = 5
         try:
-            for _ in range(COUNT_INTERVALS+1):  # 11 ticks mean 10 intervals between ticks, we want the intervals.
+            for _ in range(COUNT_INTERVALS + 1):  # 11 ticks mean 10 intervals between ticks, we want the intervals.
                 timestamps_ns.append(self.wait_for_clock_rise_signal(timeout=1))
         except TimeoutError as exc:
             raise RuntimeError("no clock, cannot derive nominal framerate!") from exc
@@ -84,32 +78,14 @@ class GpioSecondaryNodeService:
             duration_1_tick_s = duration_summed_ticks_s / (len(timestamps_ns) - 1)  # duration for 1_tick
             fps = round(1.0 / duration_1_tick_s)  # fps because fMaster=fCamera*1.0 currently
 
-            #TODO: calculate jitter for stats and information purposes
+            # TODO: calculate jitter for stats and information purposes
 
             return fps
 
-    def _on_clock_rise_in(self):
-        with self._clock_rise_in_condition:
-            self._clock_in_timestamp_ns = time.monotonic_ns()
-            self._clock_rise_in_condition.notify_all()
+    def trigger(self, on: bool):
+        self._trigger_out = on
 
-    def _on_clock_fall_in(self):
-        with self._clock_fall_in_condition:
-            self._clock_fall_in_condition.notify_all()
-
-    def wait_for_clock_rise_signal(self, timeout: float = 1.0) -> int:
-        with self._clock_rise_in_condition:
-            if not self._clock_rise_in_condition.wait(timeout=timeout):
-                raise TimeoutError("timeout receiving clock signal")
-
-            return self._clock_in_timestamp_ns
-
-    def wait_for_clock_fall_signal(self, timeout: float = 1.0):
-        with self._clock_fall_in_condition:
-            if not self._clock_fall_in_condition.wait(timeout=timeout):
-                raise TimeoutError("timeout receiving clock signal")
-
-    def set_hardware_clock(self, enable: bool = True):
+    def _set_hardware_clock(self, enable: bool = True):
         """
         Export channel (0)
         Set the period 1,000,000 ns (1kHz)
@@ -141,14 +117,6 @@ class GpioSecondaryNodeService:
 
         logger.info(f"set hw clock sysfs chip {pwm_dir}, period={PERIOD}, duty_cycle={DUTY_CYCLE}, enable={1 if enable else 0}")
 
-    def _on_trigger_in(self):
-        with self._trigger_in_condition:
-            self._trigger_in_condition.notify_all()
-
-    def wait_for_trigger_signal(self, timeout: float = None):
-        with self._trigger_in_condition:
-            self._trigger_in_condition.wait(timeout=timeout)
-
     def _event_callback(self, event):
         # print(f"offset: {event.source.offset()} timestamp: [{event.sec}.{event.nsec}]")
         if event.type == gpiod.LineEvent.RISING_EDGE:
@@ -176,7 +144,7 @@ class GpioSecondaryNodeService:
         lines_in = self._gpiod_chip.get_lines([self._gpiod_clock_in, self._gpiod_trigger_in])
         lines_in.request(consumer="clock_trigger_in", type=gpiod.LINE_REQ_EV_BOTH_EDGES, flags=gpiod.LINE_REQ_FLAG_BIAS_PULL_DOWN)
 
-        while True:
+        while self._is_running:
             ev_lines = lines_in.event_wait(sec=1)
             if ev_lines:
                 for line in ev_lines:

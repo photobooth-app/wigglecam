@@ -2,8 +2,8 @@ import logging
 import time
 from datetime import datetime
 from pathlib import Path
-from queue import Empty, Full, Queue
-from threading import Event, Thread
+from queue import Empty
+from threading import Thread
 
 from libcamera import Transform, controls
 from picamera2 import Picamera2, Preview
@@ -11,7 +11,7 @@ from picamera2.encoders import MJPEGEncoder
 from picamera2.outputs import FileOutput
 
 from ...config.models import ConfigBackendPicamera2
-from .abstractbackend import AbstractBackend, StreamingOutput
+from .abstractbackend import AbstractCameraBackend, StreamingOutput
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 ADJUST_EVERY_X_CYCLE = 8
 
 
-class Picamera2Backend(AbstractBackend):
+class Picamera2Backend(AbstractCameraBackend):
     def __init__(self, config: ConfigBackendPicamera2):
         super().__init__()
         # init with arguments
@@ -27,29 +27,19 @@ class Picamera2Backend(AbstractBackend):
 
         # private props
         self._picamera2: Picamera2 = None
-        self._queue_timestamp_monotonic_ns: Queue = None
         self._nominal_framerate: float = None
         self._adjust_sync_offset: int = 0
-        self._capture: Event = None
         self._camera_thread: Thread = None
         self._streaming_output: StreamingOutput = None
 
         # initialize private props
-        self._capture = Event()
         self._streaming_output: StreamingOutput = StreamingOutput()
 
         logger.info(f"global_camera_info {Picamera2.global_camera_info()}")
 
     def start(self, nominal_framerate: int = None):
         """To start the backend, configure picamera2"""
-        super().start()
-
-        if not nominal_framerate:
-            # if 0 or None, fail!
-            raise RuntimeError("nominal framerate needs to be given!")
-
-        self._nominal_framerate = nominal_framerate
-        self._queue_timestamp_monotonic_ns: Queue = Queue(maxsize=1)
+        super().start(nominal_framerate=nominal_framerate)
 
         # https://github.com/raspberrypi/picamera2/issues/576
         if self._picamera2:
@@ -66,7 +56,7 @@ class Picamera2Backend(AbstractBackend):
                 encode="lores",
                 display="lores",
                 buffer_count=2,
-                queue=True,
+                queue=True,  # TODO: validate. Seems False is working better on slower systems? but also on Pi5?
                 controls={"FrameRate": self._nominal_framerate},
                 transform=Transform(hflip=False, vflip=False),
             )
@@ -137,15 +127,6 @@ class Picamera2Backend(AbstractBackend):
                 raise TimeoutError("timeout receiving frames")
 
             return self._streaming_output.frame
-
-    def do_capture(self, filename: str = None, number_frames: int = 1):
-        self._capture.set()
-
-    def sync_tick(self, timestamp_ns: int):
-        try:
-            self._queue_timestamp_monotonic_ns.put_nowait(timestamp_ns)
-        except Full:
-            logger.info("could not queue timestamp - camera not started, busy or nominal fps to close to cameras max mode fps?")
 
     def _check_framerate(self):
         assert self._nominal_framerate is not None
@@ -219,6 +200,10 @@ class Picamera2Backend(AbstractBackend):
 
                 logger.info(f"####### capture end, took {round((time.time() - tms), 2)}s #######")
             else:
+                self._event_request_tick.wait(timeout=2.0)
+                self._event_request_tick.clear()
+                capture_time_assigned_timestamp_ns = 0
+
                 job = self._picamera2.capture_request(wait=False)
 
                 try:
@@ -229,9 +214,9 @@ class Picamera2Backend(AbstractBackend):
                     # continue so .is_running is checked. if supervisor detected already, var is false and effective aborted the thread.
                     # if it is still true, maybe it was restarted already and we can try again?
                     continue
-
-                picam_metadata = request.get_metadata()
-                request.release()
+                else:
+                    picam_metadata = request.get_metadata()
+                    request.release()
 
                 timestamp_delta = picam_metadata["SensorTimestamp"] - capture_time_assigned_timestamp_ns  # in ns
 
@@ -251,7 +236,7 @@ class Picamera2Backend(AbstractBackend):
                 if abs(timestamp_delta / 1.0e6) > 2.0:
                     # even in debug reduce verbosity a bit if all is fine and within 2ms tolerance
                     logger.debug(
-                        f"timestamp clk/sensor=({round((capture_time_assigned_timestamp_ns or 0)/1e6,1)}/"
+                        f"timestamp clk/sensor=({round((capture_time_assigned_timestamp_ns)/1e6,1)}/"
                         f"{round(picam_metadata['SensorTimestamp']/1e6,1)}) ms, "
                         f"delta={round((timestamp_delta)/1e6,1)} ms, "
                         f"adj_cycle_cntr={adjust_cycle_counter}, "

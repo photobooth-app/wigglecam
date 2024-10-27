@@ -5,20 +5,26 @@ import time
 import numpy
 from PIL import Image
 
-from ...config.models import ConfigBackendVirtualcamera
-from .abstractbackend import AbstractBackend
+from ...config.models import ConfigBackendVirtualCamera
+from .abstractbackend import AbstractCameraBackend
 
 logger = logging.getLogger(__name__)
 
 
-class VirtualCameraBackend(AbstractBackend):
-    def __init__(self, config: ConfigBackendVirtualcamera):
+class VirtualCameraBackend(AbstractCameraBackend):
+    def __init__(self, config: ConfigBackendVirtualCamera):
         super().__init__()
         # init with arguments
         self._config = config
 
+        # declarations
+        self._tick_tock_counter: int = None
+
+        # initializiation
+        self._tick_tock_counter = 0
+
     def start(self, nominal_framerate: int = None):
-        super().start()
+        super().start(nominal_framerate=nominal_framerate)
 
     def stop(self):
         super().stop()
@@ -30,7 +36,7 @@ class VirtualCameraBackend(AbstractBackend):
         pass
 
     def wait_for_lores_image(self):
-        time.sleep(0.05)
+        time.sleep(1.0 / self._nominal_framerate)
 
         byte_io = io.BytesIO()
         imarray = numpy.random.rand(200, 200, 3) * 255
@@ -40,7 +46,13 @@ class VirtualCameraBackend(AbstractBackend):
         return byte_io.getbuffer()
 
     def do_capture(self, filename: str = None, number_frames: int = 1):
-        pass
+        raise NotImplementedError("not yet supported by virtual camera backend")
 
     def sync_tick(self, timestamp_ns: int):
+        self._tick_tock_counter += 1
+        if self._tick_tock_counter > 10:
+            self._tick_tock_counter = 0
+            logger.debug("tick")
+
+    def request_tick(self):
         pass

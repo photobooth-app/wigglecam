@@ -3,7 +3,7 @@ from datetime import datetime
 from pydantic import PrivateAttr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .models import ConfigBackendGpio, ConfigLogging, ConfigSyncedAcquisition
+from .models import ConfigLogging, ConfigSyncedAcquisition
 
 
 class AppConfig(BaseSettings):
@@ -25,7 +25,6 @@ class AppConfig(BaseSettings):
     # groups -> setting items
     logging: ConfigLogging = ConfigLogging()
     syncedacquisition: ConfigSyncedAcquisition = ConfigSyncedAcquisition()
-    backend_gpio: ConfigBackendGpio = ConfigBackendGpio()
 
     model_config = SettingsConfigDict(
         env_file_encoding="utf-8",
