@@ -27,6 +27,7 @@ class Container:
             except Exception as exc:
                 logger.exception(exc)
                 logger.critical("could not start service")
+                raise exc  # it's reraised here, because failing a starting service is considered as major fail
 
         logger.info("started container")
 
