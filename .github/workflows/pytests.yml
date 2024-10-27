@@ -11,8 +11,44 @@ permissions:
   contents: read
 
 jobs:
+  tests:
+    env:
+      syncedacquisition__camera_backends__active_backend: VirtualCamera
+      syncedacquisition__io_backends__active_backend: VirtualIo
+
+    runs-on: ubuntu-latest
+    continue-on-error: false
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install system apt dependencies
+        run: |
+          sudo apt update
+          sudo apt -y install libturbojpeg python3-pip libgl1 git
+      - name: install pdm
+        run: |
+          pipx install pdm # on hosted pipx is installed
+          pdm install
+      - name: Run pytest
+        run: |
+          pdm run test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.python-version }}
+          path: coverage.xml
 
   tests-hardware-rpi:
+    # env:
+      ## Sets environment variable
+
+
     runs-on: [self-hosted, rpi]
     if: ${{ github.repository_owner == 'photobooth-app' }}
 
@@ -31,7 +67,7 @@ jobs:
           path: ./coverage.xml
 
   upload-to-codecov:
-    needs: [tests-hardware-rpi]
+    needs: [tests,tests-hardware-rpi]
     runs-on: ubuntu-latest
     if: ${{ github.repository_owner == 'photobooth-app' }}
     steps:
