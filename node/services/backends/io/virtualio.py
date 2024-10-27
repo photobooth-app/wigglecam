@@ -32,6 +32,7 @@ class VirtualIoBackend(AbstractIoBackend):
         # trigger out is forwarded in virtual mode directly to trigger in again
         if on:
             self._on_trigger_in()
+            logger.debug("forwarded trigger_out to trigger_in")
 
     def _gpio_fun(self):
         logger.debug("starting _gpio_fun simulating clock")

@@ -16,7 +16,7 @@ from .abstractbackend import AbstractCameraBackend, StreamingOutput
 logger = logging.getLogger(__name__)
 
 
-ADJUST_EVERY_X_CYCLE = 8
+ADJUST_EVERY_X_CYCLE = 10
 
 
 class Picamera2Backend(AbstractCameraBackend):

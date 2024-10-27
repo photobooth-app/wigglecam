@@ -90,8 +90,10 @@ class GpioBackend(AbstractIoBackend):
 
         if on:
             self._trigger_out.on()
+            logger.debug("set trigger_out ON")
         else:
             self._trigger_out.off()
+            logger.debug("set trigger_out OFF")
 
     def _set_hardware_clock(self, enable: bool = True):
         """
