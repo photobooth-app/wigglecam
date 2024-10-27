@@ -83,7 +83,10 @@ class GpioBackend(AbstractIoBackend):
             return fps
 
     def trigger(self, on: bool):
-        self._trigger_out = on
+        if on:
+            self._trigger_out.on()
+        else:
+            self._trigger_out.off()
 
     def _set_hardware_clock(self, enable: bool = True):
         """
@@ -99,7 +102,7 @@ class GpioBackend(AbstractIoBackend):
         """
         PWM_CHANNEL = self._config.pwm_channel
         PERIOD = int(1.0 / self._config.fps_nominal * 1e9)  # 1e9=ns
-        DUTY_CYCLE = PERIOD // 2
+        DUTY_CYCLE = PERIOD // 2  # //16 2==50% duty, 16=6,25%
         PWM_SYSFS = Path(f"/sys/class/pwm/{self._config.pwmchip}")
 
         if not PWM_SYSFS.is_dir():
