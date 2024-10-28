@@ -2,7 +2,7 @@ import logging
 import time
 from datetime import datetime
 from pathlib import Path
-from queue import Empty
+from queue import Empty, Queue
 from threading import Thread
 
 from libcamera import Transform, controls
@@ -30,10 +30,13 @@ class Picamera2Backend(AbstractCameraBackend):
         self._nominal_framerate: float = None
         self._adjust_sync_offset: int = 0
         self._camera_thread: Thread = None
+        self._processing_thread: Thread = None
+        self._queue_processing_img: Queue = None
         self._streaming_output: StreamingOutput = None
 
         # initialize private props
         self._streaming_output: StreamingOutput = StreamingOutput()
+        self._queue_processing_img: Queue = Queue()
 
         logger.info(f"global_camera_info {Picamera2.global_camera_info()}")
 
@@ -61,7 +64,6 @@ class Picamera2Backend(AbstractCameraBackend):
                 transform=Transform(hflip=False, vflip=False),
             )
         )
-        self._picamera2.options["quality"] = self._config.original_still_quality  # capture_file image quality
 
         if self._config.enable_preview_display:
             logger.info("starting display preview")
@@ -87,6 +89,9 @@ class Picamera2Backend(AbstractCameraBackend):
         self._picamera2.start()
 
         self._init_autofocus()
+
+        self._processing_thread = Thread(name="_processing_thread", target=self._processing_fun, args=(), daemon=True)
+        self._processing_thread.start()
 
         self._camera_thread = Thread(name="_camera_thread", target=self._camera_fun, args=(), daemon=True)
         self._camera_thread.start()
@@ -170,7 +175,7 @@ class Picamera2Backend(AbstractCameraBackend):
 
     def _camera_fun(self):
         logger.debug("starting _camera_fun")
-        timestamp_delta = 0
+        timestamp_delta_ns = 0
         adjust_cycle_counter = 0
         adjust_amount_us = 0
         adjust_amount_clamped_us = 0
@@ -178,77 +183,92 @@ class Picamera2Backend(AbstractCameraBackend):
         nominal_frame_duration_us = 1.0 / self._nominal_framerate * 1.0e6
 
         while self._is_running:
+            self._event_request_tick.wait(timeout=2.0)
+            self._event_request_tick.clear()
+            capture_time_assigned_timestamp_ns = 0
+
+            job = self._picamera2.capture_request(wait=False)
+
+            try:
+                request = self._picamera2.wait(job, timeout=2.0)
+                capture_time_assigned_timestamp_ns = self._queue_timestamp_monotonic_ns.get(block=True, timeout=2.0)
+            except (Empty, TimeoutError):  # no information in exc avail so omitted
+                logger.warning("timeout while waiting for clock/camera")
+                # continue so .is_running is checked. if supervisor detected already, var is false and effective aborted the thread.
+                # if it is still true, maybe it was restarted already and we can try again?
+                continue
+
             if self._capture.is_set():
                 self._capture.clear()
-                logger.info("####### capture #######")
+                self._queue_processing_img.put(request.make_image("main"))  # make_array/make_buffer/make_image: what is most efficient?
+                logger.info("queued up buffer to process image")
 
-                folder = Path("./tmp/")
-                filename = Path(f"img_{datetime.now().astimezone().strftime('%Y%m%d-%H%M%S-%f')}")
-                filepath = folder / filename
-                logger.info(f"{filepath=}")
+            picam_metadata = request.get_metadata()
+            request.release()
 
-                if abs(timestamp_delta / 1.0e6) > 1.0:
-                    logger.warning(f"camera captured out of sync, delta is {round(timestamp_delta/1e6,1)} ms for this frame")
-                else:
-                    logger.info(f"delta right before capture is {round(timestamp_delta/1e6,1)} ms")
+            timestamp_delta_ns = picam_metadata["SensorTimestamp"] - capture_time_assigned_timestamp_ns  # in ns
 
-                tms = time.time()
-                # take pick like following line leads to stalling in camera thread. the below method seems to have no effect on picam's cam thread
-                # picam_metadata = picamera2.capture_file(f"{filename}.jpg")
-                # It's better to capture the still in this thread, not in the one driving the camera
-                request = self._picamera2.capture_request()
-                request.save("main", filepath.with_suffix(".jpg"))
-                request.release()
+            if (timestamp_delta_ns / 1.0e9) < -(0.5 / self._nominal_framerate):
+                logger.warning("image is older than 1/2 frameduration. dropping one frame trying to catch up")
+                self._picamera2.capture_metadata()
 
-                logger.info(f"####### capture end, took {round((time.time() - tms), 2)}s #######")
+            if (timestamp_delta_ns / 1.0e9) > +(0.5 / self._nominal_framerate):
+                logger.warning("ref clock is older than 1/2 frameduration. dropping timestamp queue until catched up")
+                while True:
+                    try:
+                        self._queue_timestamp_monotonic_ns.get_nowait()
+                    except Empty:
+                        break
+
+            if adjust_cycle_counter >= ADJUST_EVERY_X_CYCLE:
+                adjust_cycle_counter = 0
+                adjust_amount_us = timestamp_delta_ns / 1.0e3
+                adjust_amount_clamped_us = self.clamp(adjust_amount_us, -0.9 * nominal_frame_duration_us, 0.9 * nominal_frame_duration_us)
             else:
-                self._event_request_tick.wait(timeout=2.0)
-                self._event_request_tick.clear()
-                capture_time_assigned_timestamp_ns = 0
+                adjust_cycle_counter += 1
+                adjust_amount_us = 0
+                adjust_amount_clamped_us = 0
 
-                job = self._picamera2.capture_request(wait=False)
+            with self._picamera2.controls as ctrl:
+                fixed_frame_duration = int(nominal_frame_duration_us - adjust_amount_clamped_us)
+                ctrl.FrameDurationLimits = (fixed_frame_duration,) * 2
 
-                try:
-                    request = self._picamera2.wait(job, timeout=2.0)
-                    capture_time_assigned_timestamp_ns = self._queue_timestamp_monotonic_ns.get(block=True, timeout=2.0)
-                except (Empty, TimeoutError):  # no information in exc avail so omitted
-                    logger.warning("timeout while waiting for clock/camera")
-                    # continue so .is_running is checked. if supervisor detected already, var is false and effective aborted the thread.
-                    # if it is still true, maybe it was restarted already and we can try again?
-                    continue
-                else:
-                    picam_metadata = request.get_metadata()
-                    request.release()
-
-                timestamp_delta = picam_metadata["SensorTimestamp"] - capture_time_assigned_timestamp_ns  # in ns
-
-                if adjust_cycle_counter >= ADJUST_EVERY_X_CYCLE:
-                    adjust_cycle_counter = 0
-                    adjust_amount_us = timestamp_delta / 1.0e3
-                    adjust_amount_clamped_us = self.clamp(adjust_amount_us, -0.9 * nominal_frame_duration_us, 0.9 * nominal_frame_duration_us)
-                else:
-                    adjust_cycle_counter += 1
-                    adjust_amount_us = 0
-                    adjust_amount_clamped_us = 0
-
-                with self._picamera2.controls as ctrl:
-                    fixed_frame_duration = int(nominal_frame_duration_us - adjust_amount_clamped_us)
-                    ctrl.FrameDurationLimits = (fixed_frame_duration,) * 2
-
-                THRESHOLD_LOG = 1.0
-                if abs(timestamp_delta / 1.0e6) > THRESHOLD_LOG:
-                    # even in debug reduce verbosity a bit if all is fine and within 2ms tolerance
-                    logger.debug(
-                        f"timestamp clk/sensor=({round((capture_time_assigned_timestamp_ns)/1e6,1)}/"
-                        f"{round(picam_metadata['SensorTimestamp']/1e6,1)}) ms, "
-                        f"delta={round((timestamp_delta)/1e6,1)} ms, "
-                        f"adj_cycle_cntr={adjust_cycle_counter}, "
-                        f"adjust_amount={round(adjust_amount_us/1e3,1)} ms "
-                        f"adjust_amount_clamped={round(adjust_amount_clamped_us/1e3,1)} ms "
-                        f"FrameDuration={round(picam_metadata['FrameDuration']/1e3,1)} ms "
-                    )
-                else:
-                    pass
-                    # silent
+            THRESHOLD_LOG = 1.0
+            if abs(timestamp_delta_ns / 1.0e6) > THRESHOLD_LOG:
+                # even in debug reduce verbosity a bit if all is fine and within 2ms tolerance
+                logger.debug(
+                    f"timestamp clk/sensor=({round((capture_time_assigned_timestamp_ns)/1e6,1)}/"
+                    f"{round(picam_metadata['SensorTimestamp']/1e6,1)}) ms, "
+                    f"delta={round((timestamp_delta_ns)/1e6,1)} ms, "
+                    f"adj_cycle_cntr={adjust_cycle_counter}, "
+                    f"adjust_amount={round(adjust_amount_us/1e3,1)} ms "
+                    f"adjust_amount_clamped={round(adjust_amount_clamped_us/1e3,1)} ms "
+                    f"FrameDuration={round(picam_metadata['FrameDuration']/1e3,1)} ms "
+                )
+            else:
+                pass
+                # silent
 
         logger.info("_camera_fun left")
+
+    def _processing_fun(self):
+        logger.debug("starting _processing_fun")
+        img_to_compress = None
+        from PIL import Image
+
+        while self._is_running:
+            try:
+                img_to_compress: Image = self._queue_processing_img.get(block=True, timeout=2.0)
+                logger.info("got img off queue, jpg proc start")
+            except Empty:
+                continue  # just continue but allow is_running to exit after 2 secs latest...
+
+            # start processing here...
+            folder = Path("./tmp/")
+            filename = Path(f"img_{datetime.now().astimezone().strftime('%Y%m%d-%H%M%S-%f')}")
+            filepath = folder / filename
+            logger.info(f"{filepath=}")
+
+            tms = time.time()
+            img_to_compress.save(filepath.with_suffix(".jpg"), quality=self._config.original_still_quality)
+            logger.info(f"jpg finished, took {round((time.time() - tms), 2)}s")
