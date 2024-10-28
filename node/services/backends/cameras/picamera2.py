@@ -200,6 +200,7 @@ class Picamera2Backend(AbstractCameraBackend):
 
             if self._capture.is_set():
                 self._capture.clear()
+                adjust_cycle_counter = 0  # don't adjust right after capture.
                 self._queue_processing_img.put(request.make_image("main"))  # make_array/make_buffer/make_image: what is most efficient?
                 logger.info("queued up buffer to process image")
 
@@ -211,6 +212,7 @@ class Picamera2Backend(AbstractCameraBackend):
             if (timestamp_delta_ns / 1.0e9) < -(0.5 / self._nominal_framerate):
                 logger.warning("image is older than 1/2 frameduration. dropping one frame trying to catch up")
                 self._picamera2.capture_metadata()
+                adjust_cycle_counter = 0  # don't adjust right after capture.
 
             if (timestamp_delta_ns / 1.0e9) > +(0.5 / self._nominal_framerate):
                 logger.warning("ref clock is older than 1/2 frameduration. dropping timestamp queue until catched up")
@@ -218,6 +220,7 @@ class Picamera2Backend(AbstractCameraBackend):
                     try:
                         self._queue_timestamp_monotonic_ns.get_nowait()
                     except Empty:
+                        adjust_cycle_counter = 0  # don't adjust right after capture.
                         break
 
             if adjust_cycle_counter >= ADJUST_EVERY_X_CYCLE:
