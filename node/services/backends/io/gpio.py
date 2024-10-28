@@ -70,6 +70,11 @@ class GpioBackend(AbstractIoBackend):
         """
         timestamps_ns = []
         COUNT_INTERVALS = 5
+
+        logger.info(f"derive_nominal_framerate_from_clock counting {COUNT_INTERVALS} intervals")
+
+        time.sleep(0.1)  # wait very short time to ensure clock has stabilized...
+
         try:
             for _ in range(COUNT_INTERVALS + 1):  # 11 ticks mean 10 intervals between ticks, we want the intervals.
                 timestamps_ns.append(self.wait_for_clock_rise_signal(timeout=1))

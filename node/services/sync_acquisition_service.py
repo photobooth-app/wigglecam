@@ -200,9 +200,15 @@ class SyncedAcquisitionService(BaseService):
 
                 logger.info("got clock impulse, continue starting...")
 
-                logger.info("deriving nominal framerate from clock signal, counting 10 ticks...")
-                derived_fps = self._gpio_backend.derive_nominal_framerate_from_clock()
-                logger.info(f"got it, derived {derived_fps}fps...")
+                try:
+                    logger.info("deriving nominal framerate from clock signal...")
+                    derived_fps = self._gpio_backend.derive_nominal_framerate_from_clock()
+                    logger.info(f"got it, derived {derived_fps}fps...")
+                except Exception as exc:
+                    logger.exception(exc)
+                    logger.error(f"error deriving framerate: {exc}")
+
+                    self._device_stop()
 
                 try:
                     self._device_start(derived_fps)
@@ -212,7 +218,7 @@ class SyncedAcquisitionService(BaseService):
 
                     self._device_stop()
 
-                    time.sleep(2)  # just do not try too often...
+                time.sleep(2)  # just do not try too often...
 
             time.sleep(1)
 
