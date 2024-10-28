@@ -8,8 +8,7 @@ import gpiod
 from gpiod.line import Bias, Clock, Direction, Edge
 from gpiozero import DigitalOutputDevice
 
-from utils.stoppablethread import StoppableThread
-
+from ....utils.stoppablethread import StoppableThread
 from ...config.models import ConfigBackendGpio
 from .abstractbackend import AbstractIoBackend
 

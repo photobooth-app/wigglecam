@@ -2,8 +2,7 @@ import logging
 import time
 from threading import current_thread
 
-from utils.stoppablethread import StoppableThread
-
+from ....utils.stoppablethread import StoppableThread
 from ...config.models import ConfigBackendVirtualIo
 from .abstractbackend import AbstractIoBackend
 

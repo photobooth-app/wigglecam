@@ -11,8 +11,7 @@ from picamera2.encoders import MJPEGEncoder, Quality
 from picamera2.outputs import FileOutput
 from PIL import Image
 
-from utils.stoppablethread import StoppableThread
-
+from ....utils.stoppablethread import StoppableThread
 from ...config.models import ConfigBackendPicamera2
 from .abstractbackend import AbstractCameraBackend, StreamingOutput
 
