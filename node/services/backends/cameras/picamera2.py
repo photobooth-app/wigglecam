@@ -7,7 +7,7 @@ from threading import Thread
 
 from libcamera import Transform, controls
 from picamera2 import Picamera2, Preview
-from picamera2.encoders import MJPEGEncoder
+from picamera2.encoders import MJPEGEncoder, Quality
 from picamera2.outputs import FileOutput
 
 from ...config.models import ConfigBackendPicamera2
@@ -113,7 +113,9 @@ class Picamera2Backend(AbstractCameraBackend):
         # encoder.frame_skip_count = 2  # every nth frame to save cpu/bandwith on
         # low power devices but this can cause issues with timing it seems and permanent non-synchronizity
 
-        self._picamera2.start_recording(encoder, FileOutput(self._streaming_output))
+        logger.info(f"stream quality {Quality[self._config.videostream_quality]=}")
+
+        self._picamera2.start_recording(encoder, FileOutput(self._streaming_output), quality=Quality[self._config.videostream_quality])
         logger.info("encoding stream started")
 
     def stop_stream(self):

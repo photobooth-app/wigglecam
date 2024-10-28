@@ -35,6 +35,10 @@ class ConfigBackendPicamera2(BaseModel):
     LIVEVIEW_RESOLUTION_WIDTH: int = Field(default=768)
     LIVEVIEW_RESOLUTION_HEIGHT: int = Field(default=432)
     original_still_quality: int = Field(default=90)
+    videostream_quality: Literal["VERY_LOW", "LOW", "MEDIUM", "HIGH", "VERY_HIGH"] = Field(
+        default="MEDIUM",
+        description="Lower quality results in less data to be transferred and may reduce load on devices.",
+    )
 
 
 class GroupCameraBackend(BaseModel):
