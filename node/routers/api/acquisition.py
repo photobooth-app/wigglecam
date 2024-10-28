@@ -38,7 +38,7 @@ def setup_job(job_id, number_captures):
 
 @router.get("/trigger")
 def trigger_job(job_id):
-    container.synced_acquisition_service.execute_job()
+    container.synced_acquisition_service.set_trigger_out()
 
 
 @router.get("/results")

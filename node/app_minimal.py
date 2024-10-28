@@ -45,7 +45,7 @@ def main(args=None, run: bool = True):
     logger.info("starting app")
 
     _shutterbutton_in = Button(pin=shutter_pin, bounce_time=0.04)
-    _shutterbutton_in.when_pressed = container.synced_acquisition_service.execute_job
+    _shutterbutton_in.when_pressed = container.synced_acquisition_service.set_trigger_out
     logger.info(f"external trigger button on {_shutterbutton_in}")
 
     try:
