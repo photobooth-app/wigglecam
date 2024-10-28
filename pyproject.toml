@@ -38,12 +38,10 @@ dependencies = [
     "pillow>=10.0.0",
     "fastapi",
     "uvicorn",
+    "gpiod>=2.2.1",
+    "opencv-python",
 ]
 
-[project.optional-dependencies]
-wigglify = [
-  "opencv-python>=4.8.1",
-]
 
 [project.urls]
 homepage = "https://github.com/mgineer85/photobooth-wigglecam"

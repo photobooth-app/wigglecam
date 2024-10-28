@@ -45,9 +45,11 @@ class AbstractIoBackend(ABC):
             return False
         return (time.monotonic_ns() - self._clock_in_timestamp_ns) < TIMEOUT_CLOCK_SIGNAL_INVALID
 
-    def _on_clock_rise_in(self):
+    def _on_clock_rise_in(self, timestamp_ns: int):
+        # print(f"kernel={timestamp_ns}, monotonic={time.monotonic_ns()}")
+
         with self._clock_rise_in_condition:
-            self._clock_in_timestamp_ns = time.monotonic_ns()
+            self._clock_in_timestamp_ns = timestamp_ns
             self._clock_rise_in_condition.notify_all()
 
     def _on_clock_fall_in(self):

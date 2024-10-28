@@ -52,7 +52,7 @@ class AbstractCameraBackend(ABC):
             raise RuntimeError("nominal framerate needs to be given!")
 
         self._nominal_framerate = nominal_framerate
-        self._queue_timestamp_monotonic_ns: Queue = Queue(maxsize=1)
+        self._queue_timestamp_monotonic_ns: Queue = Queue(maxsize=2)
 
     @abstractmethod
     def stop(self):

@@ -207,8 +207,8 @@ class Picamera2Backend(AbstractCameraBackend):
                 job = self._picamera2.capture_request(wait=False)
 
                 try:
-                    capture_time_assigned_timestamp_ns = self._queue_timestamp_monotonic_ns.get(block=True, timeout=2.0)
                     request = self._picamera2.wait(job, timeout=2.0)
+                    capture_time_assigned_timestamp_ns = self._queue_timestamp_monotonic_ns.get(block=True, timeout=2.0)
                 except (Empty, TimeoutError):  # no information in exc avail so omitted
                     logger.warning("timeout while waiting for clock/camera")
                     # continue so .is_running is checked. if supervisor detected already, var is false and effective aborted the thread.
@@ -233,7 +233,8 @@ class Picamera2Backend(AbstractCameraBackend):
                     fixed_frame_duration = int(nominal_frame_duration_us - adjust_amount_clamped_us)
                     ctrl.FrameDurationLimits = (fixed_frame_duration,) * 2
 
-                if abs(timestamp_delta / 1.0e6) > 2.0:
+                THRESHOLD_LOG = 1.0
+                if abs(timestamp_delta / 1.0e6) > THRESHOLD_LOG:
                     # even in debug reduce verbosity a bit if all is fine and within 2ms tolerance
                     logger.debug(
                         f"timestamp clk/sensor=({round((capture_time_assigned_timestamp_ns)/1e6,1)}/"

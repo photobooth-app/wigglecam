@@ -5,6 +5,7 @@ from pathlib import Path
 from threading import Thread
 
 import gpiod
+from gpiod.line import Bias, Clock, Direction, Edge
 from gpiozero import DigitalOutputDevice
 
 from ...config.models import ConfigBackendGpio
@@ -21,16 +22,11 @@ class GpioBackend(AbstractIoBackend):
         self._config: ConfigBackendGpio = config
 
         # private props
-        self._gpiod_chip = None
-        self._gpiod_clock_in = None
-        self._gpiod_trigger_in = None
         self._gpio_thread: Thread = None
         self._trigger_out: DigitalOutputDevice = None
 
         # init private props
-        self._gpiod_chip = gpiod.Chip(self._config.chip)
-        self._gpiod_clock_in = gpiod.find_line(self._config.clock_in_pin_name).offset()
-        self._gpiod_trigger_in = gpiod.find_line(self._config.trigger_in_pin_name).offset()
+        pass
 
     def start(self):
         super().start()
@@ -127,40 +123,54 @@ class GpioBackend(AbstractIoBackend):
 
         logger.info(f"set hw clock sysfs chip {pwm_dir}, period={PERIOD}, duty_cycle={DUTY_CYCLE}, enable={1 if enable else 0}")
 
-    def _event_callback(self, event):
-        # print(f"offset: {event.source.offset()} timestamp: [{event.sec}.{event.nsec}]")
-        if event.type == gpiod.LineEvent.RISING_EDGE:
-            if event.source.offset() == self._gpiod_clock_in:
-                self._on_clock_rise_in()
-            elif event.source.offset() == self._gpiod_trigger_in:
-                self._on_trigger_in()
-            else:
-                raise ValueError("Invalid event source")
-
-        elif event.type == gpiod.LineEvent.FALLING_EDGE:
-            if event.source.offset() == self._gpiod_clock_in:
-                self._on_clock_fall_in()
-            elif event.source.offset() == self._gpiod_trigger_in:
-                pass
-            else:
-                raise ValueError("Invalid event source")
-        else:
-            raise TypeError("Invalid event type")
-
     def _gpio_fun(self):
         logger.debug("starting _gpio_fun")
 
-        # setup lines
-        lines_in = self._gpiod_chip.get_lines([self._gpiod_clock_in, self._gpiod_trigger_in])
-        lines_in.request(consumer="clock_trigger_in", type=gpiod.LINE_REQ_EV_BOTH_EDGES, flags=gpiod.LINE_REQ_FLAG_BIAS_PULL_DOWN)
+        _gpiod_clock_in = None
+        _gpiod_trigger_in = None
 
-        while self._is_running:
-            ev_lines = lines_in.event_wait(sec=1)
-            if ev_lines:
-                for line in ev_lines:
-                    event = line.event_read()
-                    self._event_callback(event)
+        def _event_callback(event: gpiod.EdgeEvent):
+            if event.event_type is event.Type.RISING_EDGE:
+                if event.line_offset == _gpiod_clock_in:
+                    self._on_clock_rise_in(event.timestamp_ns)
+                elif event.line_offset == _gpiod_trigger_in:
+                    self._on_trigger_in()
+                else:
+                    raise ValueError("Invalid event source")
+
+            elif event.event_type == event.Type.FALLING_EDGE:
+                if event.line_offset == _gpiod_clock_in:
+                    self._on_clock_fall_in()
+                elif event.line_offset == _gpiod_trigger_in:
+                    pass
+                else:
+                    raise ValueError("Invalid event source")
             else:
-                pass  # nothing to do if no event came in
+                raise TypeError("Invalid event type")
+
+        with gpiod.Chip(self._config.chip) as chip:
+            try:
+                _gpiod_clock_in = chip.line_offset_from_id(self._config.clock_in_pin_name)
+                _gpiod_trigger_in = chip.line_offset_from_id(self._config.trigger_in_pin_name)
+            except OSError as exc:
+                # An OSError is raised if the name is not found.
+                raise RuntimeError(f"gpio not found: {exc}") from exc
+
+        # setup lines
+        with gpiod.request_lines(
+            self._config.chip,
+            consumer="clock_trigger_in",
+            config={
+                tuple([_gpiod_clock_in, _gpiod_trigger_in]): gpiod.LineSettings(
+                    edge_detection=Edge.BOTH,
+                    direction=Direction.INPUT,
+                    bias=Bias.PULL_DOWN,
+                    event_clock=Clock.MONOTONIC,
+                )
+            },
+        ) as request:
+            while self._is_running:
+                for event in request.read_edge_events():
+                    _event_callback(event)
 
         logger.info("_gpio_fun left")
