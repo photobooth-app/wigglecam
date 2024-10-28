@@ -2,11 +2,13 @@ import logging
 import os
 import time
 from pathlib import Path
-from threading import Thread
+from threading import current_thread
 
 import gpiod
 from gpiod.line import Bias, Clock, Direction, Edge
 from gpiozero import DigitalOutputDevice
+
+from utils.stoppablethread import StoppableThread
 
 from ...config.models import ConfigBackendGpio
 from .abstractbackend import AbstractIoBackend
@@ -22,7 +24,7 @@ class GpioBackend(AbstractIoBackend):
         self._config: ConfigBackendGpio = config
 
         # private props
-        self._gpio_thread: Thread = None
+        self._gpio_thread: StoppableThread = None
         self._trigger_out: DigitalOutputDevice = None
 
         # init private props
@@ -42,7 +44,7 @@ class GpioBackend(AbstractIoBackend):
             logger.info("skipped loading primary clockwork service because disabled in config")
             logger.info("skipped enabling trigger_out because disabled in config, trigger out should be enabled on primary node usually only.")
 
-        self._gpio_thread = Thread(name="_gpio_thread", target=self._gpio_fun, args=(), daemon=True)
+        self._gpio_thread = StoppableThread(name="_gpio_thread", target=self._gpio_fun, args=(), daemon=True)
         self._gpio_thread.start()
 
         logger.debug(f"{self.__module__} started")
@@ -55,6 +57,10 @@ class GpioBackend(AbstractIoBackend):
 
         if self._trigger_out:
             self._trigger_out.close()
+
+        if self._gpio_thread and self._gpio_thread.is_alive():
+            self._gpio_thread.stop()
+            self._gpio_thread.join()
 
     def derive_nominal_framerate_from_clock(self) -> int:
         """calc the framerate derived by monitoring the clock signal for 11 ticks (means 10 intervals).
@@ -169,8 +175,14 @@ class GpioBackend(AbstractIoBackend):
                 )
             },
         ) as request:
-            while self._is_running:
-                for event in request.read_edge_events():
-                    _event_callback(event)
+            while not current_thread().stopped():
+                # timeout to allow the thread to end after 1s if stopped and no events received (read_edge_events would block infinite otherwise)
+                if request.wait_edge_events(timeout=1.0):
+                    for event in request.read_edge_events():
+                        # print(event)
+                        _event_callback(event)
+                else:
+                    # print("no events")
+                    pass
 
         logger.info("_gpio_fun left")

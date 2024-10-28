@@ -3,12 +3,15 @@ import time
 from datetime import datetime
 from pathlib import Path
 from queue import Empty, Queue
-from threading import Thread
+from threading import current_thread
 
 from libcamera import Transform, controls
 from picamera2 import Picamera2, Preview
 from picamera2.encoders import MJPEGEncoder, Quality
 from picamera2.outputs import FileOutput
+from PIL import Image
+
+from utils.stoppablethread import StoppableThread
 
 from ...config.models import ConfigBackendPicamera2
 from .abstractbackend import AbstractCameraBackend, StreamingOutput
@@ -29,8 +32,8 @@ class Picamera2Backend(AbstractCameraBackend):
         self._picamera2: Picamera2 = None
         self._nominal_framerate: float = None
         self._adjust_sync_offset: int = 0
-        self._camera_thread: Thread = None
-        self._processing_thread: Thread = None
+        self._camera_thread: StoppableThread = None
+        self._processing_thread: StoppableThread = None
         self._queue_processing_img: Queue = None
         self._streaming_output: StreamingOutput = None
 
@@ -90,10 +93,10 @@ class Picamera2Backend(AbstractCameraBackend):
 
         self._init_autofocus()
 
-        self._processing_thread = Thread(name="_processing_thread", target=self._processing_fun, args=(), daemon=True)
+        self._processing_thread = StoppableThread(name="_processing_thread", target=self._processing_fun, args=(), daemon=True)
         self._processing_thread.start()
 
-        self._camera_thread = Thread(name="_camera_thread", target=self._camera_fun, args=(), daemon=True)
+        self._camera_thread = StoppableThread(name="_camera_thread", target=self._camera_fun, args=(), daemon=True)
         self._camera_thread.start()
 
         logger.info(f"camera_config: {self._picamera2.camera_config}")
@@ -109,6 +112,14 @@ class Picamera2Backend(AbstractCameraBackend):
         if self._picamera2:
             self._picamera2.stop()
             self._picamera2.close()  # need to close camera so it can be used by other processes also (or be started again)
+
+        if self._camera_thread and self._camera_thread.is_alive():
+            self._camera_thread.stop()
+            self._camera_thread.join()
+
+        if self._processing_thread and self._processing_thread.is_alive():
+            self._processing_thread.stop()
+            self._processing_thread.join()
 
         logger.debug(f"{self.__module__} stopped")
 
@@ -182,7 +193,7 @@ class Picamera2Backend(AbstractCameraBackend):
         capture_time_assigned_timestamp_ns = None
         nominal_frame_duration_us = 1.0 / self._nominal_framerate * 1.0e6
 
-        while self._is_running:
+        while not current_thread().stopped():
             self._event_request_tick.wait(timeout=2.0)
             self._event_request_tick.clear()
             capture_time_assigned_timestamp_ns = 0
@@ -194,9 +205,9 @@ class Picamera2Backend(AbstractCameraBackend):
                 capture_time_assigned_timestamp_ns = self._queue_timestamp_monotonic_ns.get(block=True, timeout=2.0)
             except (Empty, TimeoutError):  # no information in exc avail so omitted
                 logger.warning("timeout while waiting for clock/camera")
-                # continue so .is_running is checked. if supervisor detected already, var is false and effective aborted the thread.
-                # if it is still true, maybe it was restarted already and we can try again?
-                continue
+                # break thread run loop, so the function will quit and .alive is false for this thread -
+                # supervisor could then decide to start it again.
+                break
 
             if self._capture.is_set():
                 self._capture.clear()
@@ -256,15 +267,14 @@ class Picamera2Backend(AbstractCameraBackend):
 
     def _processing_fun(self):
         logger.debug("starting _processing_fun")
-        img_to_compress = None
-        from PIL import Image
+        img_to_compress: Image = None
 
-        while self._is_running:
+        while not current_thread().stopped():
             try:
-                img_to_compress: Image = self._queue_processing_img.get(block=True, timeout=2.0)
+                img_to_compress: Image = self._queue_processing_img.get(block=True, timeout=1.0)
                 logger.info("got img off queue, jpg proc start")
             except Empty:
-                continue  # just continue but allow is_running to exit after 2 secs latest...
+                continue  # just continue but allow .stopped to exit after 1.0 sec latest...
 
             # start processing here...
             folder = Path("./tmp/")
@@ -274,4 +284,4 @@ class Picamera2Backend(AbstractCameraBackend):
 
             tms = time.time()
             img_to_compress.save(filepath.with_suffix(".jpg"), quality=self._config.original_still_quality)
-            logger.info(f"jpg finished, took {round((time.time() - tms), 2)}s")
+            logger.info(f"jpg compression finished, time taken: {round((time.time() - tms)*1.0e3, 0)}ms")

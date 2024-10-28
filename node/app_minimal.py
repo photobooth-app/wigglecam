@@ -38,11 +38,12 @@ def main(args=None, run: bool = True):
         logger.critical(f"cannot create data folders, error: {exc}")
         raise RuntimeError(f"cannot create data folders, error: {exc}") from exc
 
+    logger.info("✨ ✨ starting app")
+
     shutter_pin = args.shutter_pin
     logger.info(f"shutter pin registered on {shutter_pin}")
 
     container.start()
-    logger.info("starting app")
 
     _shutterbutton_in = Button(pin=shutter_pin, bounce_time=0.04)
     _shutterbutton_in.when_pressed = container.synced_acquisition_service.set_trigger_out
@@ -58,6 +59,8 @@ def main(args=None, run: bool = True):
     # Clean up
     logger.info("clean up")
     container.stop()
+
+    logger.info("app finished! ✨")
 
 
 if __name__ == "__main__":

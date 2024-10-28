@@ -1,6 +1,8 @@
 import logging
 import time
-from threading import Thread
+from threading import current_thread
+
+from utils.stoppablethread import StoppableThread
 
 from ...config.models import ConfigBackendVirtualIo
 from .abstractbackend import AbstractIoBackend
@@ -14,16 +16,20 @@ class VirtualIoBackend(AbstractIoBackend):
 
         self._config: ConfigBackendVirtualIo = config
 
-        self._gpio_thread: Thread = None
+        self._gpio_thread: StoppableThread = None
 
     def start(self):
         super().start()
 
-        self._gpio_thread = Thread(name="_gpio_thread", target=self._gpio_fun, args=(), daemon=True)
+        self._gpio_thread = StoppableThread(name="_gpio_thread", target=self._gpio_fun, args=(), daemon=True)
         self._gpio_thread.start()
 
     def stop(self):
         super().stop()
+
+        if self._gpio_thread and self._gpio_thread.is_alive():
+            self._gpio_thread.stop()
+            self._gpio_thread.join()
 
     def derive_nominal_framerate_from_clock(self) -> int:
         return self._config.fps_nominal
@@ -38,7 +44,7 @@ class VirtualIoBackend(AbstractIoBackend):
         logger.debug("starting _gpio_fun simulating clock")
         logger.info("virtual clock is very basic and suffers from high jitter")
 
-        while self._is_running:
+        while not current_thread().stopped():
             time.sleep((1.0 / self._config.fps_nominal) / 2.0)
             self._on_clock_rise_in()
             time.sleep((1.0 / self._config.fps_nominal) / 2.0)

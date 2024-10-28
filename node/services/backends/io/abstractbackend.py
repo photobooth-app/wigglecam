@@ -1,34 +1,31 @@
 import time
 from abc import ABC, abstractmethod
-from threading import Condition
+from threading import Condition, Event
 
 
 class AbstractIoBackend(ABC):
     def __init__(self):
-        # used to abort threads when service is stopped.
-        self._is_running: bool = None
-
         # abstract properties
         self._clock_rise_in_condition: Condition = None
         self._clock_fall_in_condition: Condition = None
-        self._trigger_in_condition: Condition = None
+        self._trigger_in_flag: Event = None
         self._clock_in_timestamp_ns = None
 
         # abstract common properties init
         self._clock_rise_in_condition: Condition = Condition()
         self._clock_fall_in_condition: Condition = Condition()
-        self._trigger_in_condition: Condition = Condition()
+        self._trigger_in_flag: Event = Event()
 
     def __repr__(self):
         return f"{self.__class__}"
 
     @abstractmethod
     def start(self):
-        self._is_running: bool = True
+        pass
 
     @abstractmethod
     def stop(self):
-        self._is_running: bool = False
+        pass
 
     @abstractmethod
     def derive_nominal_framerate_from_clock(self) -> int:
@@ -46,8 +43,6 @@ class AbstractIoBackend(ABC):
         return (time.monotonic_ns() - self._clock_in_timestamp_ns) < TIMEOUT_CLOCK_SIGNAL_INVALID
 
     def _on_clock_rise_in(self, timestamp_ns: int):
-        # print(f"kernel={timestamp_ns}, monotonic={time.monotonic_ns()}")
-
         with self._clock_rise_in_condition:
             self._clock_in_timestamp_ns = timestamp_ns
             self._clock_rise_in_condition.notify_all()
@@ -57,8 +52,7 @@ class AbstractIoBackend(ABC):
             self._clock_fall_in_condition.notify_all()
 
     def _on_trigger_in(self):
-        with self._trigger_in_condition:
-            self._trigger_in_condition.notify_all()
+        self._trigger_in_flag.set()
 
     def wait_for_clock_rise_signal(self, timeout: float = 1.0) -> int:
         with self._clock_rise_in_condition:
@@ -71,7 +65,3 @@ class AbstractIoBackend(ABC):
         with self._clock_fall_in_condition:
             if not self._clock_fall_in_condition.wait(timeout=timeout):
                 raise TimeoutError("timeout receiving clock signal")
-
-    def wait_for_trigger_signal(self, timeout: float = None):
-        with self._trigger_in_condition:
-            self._trigger_in_condition.wait(timeout=timeout)

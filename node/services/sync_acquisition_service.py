@@ -4,7 +4,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from importlib import import_module
 from pathlib import Path
-from threading import Event, Thread
+from queue import Full, Queue
+from threading import Event, current_thread
+
+from utils.stoppablethread import StoppableThread
 
 from .backends.cameras.abstractbackend import AbstractCameraBackend
 from .backends.io.abstractbackend import AbstractIoBackend
@@ -37,15 +40,18 @@ class SyncedAcquisitionService(BaseService):
         # to sync, a camera backend and io backend is used.
         self._camera_backend: AbstractCameraBackend = None
         self._gpio_backend: AbstractIoBackend = None
-        self._sync_thread: Thread = None
-        self._capture_thread: Thread = None
-        self._trigger_thread: Thread = None
+        self._sync_thread: StoppableThread = None
+        self._trigger_in_thread: StoppableThread = None
+        self._trigger_out_thread: StoppableThread = None
+        self._supervisor_thread: StoppableThread = None
         self._job: CaptureJob = None
-        self._device_is_running: bool = None
         self._flag_trigger_out: Event = None
+        self._device_initialized_once: bool = False
+        self._queue_job: Queue = None
 
         # initialize private properties.
         self._flag_trigger_out: Event = Event()
+        self._queue_job: Queue = Queue(maxsize=1)
 
     def start(self):
         super().start()
@@ -62,7 +68,7 @@ class SyncedAcquisitionService(BaseService):
 
         self._gpio_backend.start()
 
-        self._supervisor_thread = Thread(name="_supervisor_thread", target=self._supervisor_fun, args=(), daemon=True)
+        self._supervisor_thread = StoppableThread(name="_supervisor_thread", target=self._supervisor_fun, args=(), daemon=True)
         self._supervisor_thread.start()
 
         logger.debug(f"{self.__module__} started")
@@ -72,6 +78,10 @@ class SyncedAcquisitionService(BaseService):
 
         if self._gpio_backend:
             self._gpio_backend.stop()
+
+        if self._supervisor_thread and self._supervisor_thread.is_alive():
+            self._supervisor_thread.stop()
+            self._supervisor_thread.join()
 
         logger.debug(f"{self.__module__} stopped")
 
@@ -95,10 +105,7 @@ class SyncedAcquisitionService(BaseService):
         logger.info("livestream requested")
         self._camera_backend.start_stream()
 
-        if not self._device_is_running or not self._is_running:
-            raise RuntimeError("device not started, cannot deliver stream")
-
-        while self._is_running and self._device_is_running:
+        while True:
             try:
                 output_jpeg_bytes = self._camera_backend.wait_for_lores_image()
             except StopIteration:
@@ -114,55 +121,85 @@ class SyncedAcquisitionService(BaseService):
 
             yield (b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + output_jpeg_bytes + b"\r\n\r\n")
 
-        self._camera_backend.stop_stream()
-
     def setup_job(self, job: CaptureJob):
-        self._job = job
+        try:
+            self._queue_job.put_nowait(job)
+        except Full as exc:
+            raise RuntimeError("there is already an unprocessed job! reset first to queue a new job or process it") from exc
 
     def set_trigger_out(self):
         self._flag_trigger_out.set()
 
     def _device_start(self, derived_fps: int):
-        self._device_is_running = True
-
         logger.info("starting device")
+
+        if self._device_initialized_once:
+            logger.info("device already initialized once, stopping all first before starting again")
+            self._device_stop()
+        else:
+            self._device_initialized_once = True
 
         self._camera_backend.start(nominal_framerate=derived_fps)
 
-        self._sync_thread = Thread(name="_sync_thread", target=self._sync_fun, args=(), daemon=True)
+        # sync clock and camera thread
+        self._sync_thread = StoppableThread(name="_sync_thread", target=self._sync_fun, args=(), daemon=True)
         self._sync_thread.start()
-        self._capture_thread = Thread(name="_capture_thread", target=self._capture_fun, args=(), daemon=True)
-        self._capture_thread.start()
-        self._trigger_thread = Thread(name="_trigger_thread", target=self._trigger_fun, args=(), daemon=True)
-        self._trigger_thread.start()
+        # capture thread
+        self._trigger_in_thread = StoppableThread(name="_trigger_in_thread", target=self._trigger_in_fun, args=(), daemon=True)
+        self._trigger_in_thread.start()
+        # forward trigger to other devices thread
+        self._trigger_out_thread = StoppableThread(name="_trigger_out_thread", target=self._trigger_out_fun, args=(), daemon=True)
+        self._trigger_out_thread.start()
 
         logger.info("device started")
 
     def _device_stop(self):
-        self._device_is_running = False
-
         self._camera_backend.stop()
 
-    def _wait_for_clock(self, timeout: float = 2.0):
-        assert self._is_running is True  # ensure to never call this function when not already started.
+        if self._trigger_out_thread and self._trigger_out_thread.is_alive():
+            self._trigger_out_thread.stop()
+            self._trigger_out_thread.join()
 
-        while self._is_running:
-            try:
-                if self._gpio_backend.wait_for_clock_rise_signal(timeout=timeout):
-                    logger.info("clock signal received, continue...")
-                    break
-            except TimeoutError:
-                logger.info("waiting for clock signal in...")
-            except Exception as exc:
-                logger.exception(exc)
-                logger.error("unexpected error while waiting for sync clock in")
+        if self._trigger_in_thread and self._trigger_in_thread.is_alive():
+            self._trigger_in_thread.stop()
+            self._trigger_in_thread.join()
+
+        if self._sync_thread and self._sync_thread.is_alive():
+            self._sync_thread.stop()
+            self._sync_thread.join()
+
+    def _device_alive(self):
+        trigger_out_alive = self._trigger_out_thread and self._trigger_out_thread.is_alive()
+        trigger_in_alive = self._trigger_in_thread and self._trigger_in_thread.is_alive()
+        sync_alive = self._sync_thread and self._sync_thread.is_alive()
+
+        return trigger_out_alive and trigger_in_alive and sync_alive
+
+    def _clock_impulse_detected(self, timeout: float = None):
+        try:
+            if self._gpio_backend.wait_for_clock_rise_signal(timeout=timeout):
+                logger.info("clock signal received, continue...")
+                return True
+
+        except TimeoutError:
+            logger.info("waiting for clock signal in...")
+        except Exception as exc:
+            logger.exception(exc)
+            logger.error("unexpected error while waiting for sync clock in")
+
+        return False
 
     def _supervisor_fun(self):
         logger.info("device supervisor started, checking for clock, then starting device")
-        while self._is_running:
-            if not self._device_is_running:
-                self._wait_for_clock()
-                logger.info("got it, continue starting...")
+
+        while not current_thread().stopped():
+            if not self._device_alive():
+                if not self._clock_impulse_detected(timeout=2.0):
+                    # loop restart until we got an impulse from master
+                    time.sleep(1)
+                    continue
+
+                logger.info("got clock impulse, continue starting...")
 
                 logger.info("deriving nominal framerate from clock signal, counting 10 ticks...")
                 derived_fps = self._gpio_backend.derive_nominal_framerate_from_clock()
@@ -174,25 +211,25 @@ class SyncedAcquisitionService(BaseService):
                     logger.exception(exc)
                     logger.error(f"error starting device: {exc}")
 
-                    self._device_stop()  # stop which sets device_is_running flag to false so supervisor could restart again.
+                    self._device_stop()
 
                     time.sleep(2)  # just do not try too often...
 
-            else:
-                time.sleep(1)
+            time.sleep(1)
 
         logger.info("device supervisor exit, stopping devices")
-        self._device_stop()
-        logger.info("device supervisor exit, stopped devices")
+        self._device_stop()  # safety first, maybe it's double stopped, but prevent any stalling of device-threads
+
+        logger.info("left _supervisor_fun")
 
     def _sync_fun(self):
-        while self._device_is_running:
+        while not current_thread().stopped():
             try:
                 timestamp_ns = self._gpio_backend.wait_for_clock_rise_signal(timeout=1)
             except TimeoutError:
                 # stop devices when no clock is avail, supervisor enables again after clock is received, derives new framerate ans starts backends
-                logger.error("no clock signal received within timeout! stopping devices.")
-                self._device_stop()
+                logger.error("clock signal missing.")
+                break
             else:
                 self._camera_backend.sync_tick(timestamp_ns)
 
@@ -200,53 +237,72 @@ class SyncedAcquisitionService(BaseService):
                 self._gpio_backend.wait_for_clock_fall_signal(timeout=1)
             except TimeoutError:
                 # stop devices when no clock is avail, supervisor enables again after clock is received, derives new framerate ans starts backends
-                logger.error("no clock signal received within timeout! stopping devices.")
-                self._device_stop()
+                logger.error("clock signal missing.")
+                break
             else:
                 self._camera_backend.request_tick()
 
-    def _capture_fun(self):
-        while self._device_is_running:
-            self._gpio_backend.wait_for_trigger_signal(timeout=None)
-            # TODO: this needs to be able to timeout and finish finally. QUEUE?
-            # otherwise threads are orphaned after restarted by supervisor!
-            # TODO: need to join all threads!
+        logger.info("left _sync_fun")  # if left, it allows supervisor to restart if needed.
 
-            # useful if mobile camera is without any interconnection to a concentrator that could setup a job
-            if self._config.allow_standalone_job:
-                logger.info("using default capture job")
-                self._job = CaptureJob()
+    def _trigger_in_fun(self):
+        while not current_thread().stopped():
+            if self._gpio_backend._trigger_in_flag.wait(timeout=1.0):
+                # first clear to avoid endless loops
+                self._gpio_backend._trigger_in_flag.clear()
 
-            if self._job:
-                try:
-                    self._camera_backend.do_capture(self._job.id, self._job.number_captures)
-                except Exception as exc:
-                    logger.exception(exc)
-                    logger.critical(f"error during capture: {exc}")
-                finally:
-                    self._job = None
+                logger.info("trigger_in received to start processing job")
+                # useful if mobile camera is without any interconnection to a concentrator that could setup a job
+                if self._config.allow_standalone_job:
+                    logger.info("using default capture job")
+                    self._job = CaptureJob()
+
+                if self._job:
+                    try:
+                        self._camera_backend.do_capture(self._job.id, self._job.number_captures)
+                    except Exception as exc:
+                        logger.exception(exc)
+                        logger.critical(f"error during capture: {exc}")
+                    finally:
+                        self._job = None
+                else:
+                    logger.warning("capture request ignored because no job set!")
             else:
-                logger.warning("capture request ignored because no job set!")
+                pass
+                # flag not set, continue
 
-    def _trigger_fun(self):
-        while self._device_is_running:
+        logger.info("left _trigger_in_fun")  # if left, it allows supervisor to restart if needed.
+
+    def _trigger_out_fun(self):
+        while not current_thread().stopped():
             # wait until execute job is requested
             if self._flag_trigger_out.wait(timeout=1):
                 # first clear to avoid endless loops
                 self._flag_trigger_out.clear()
+
                 logger.info("send trigger_out to start processing job")
                 # timeout=anything so it doesnt block shutdown. If flag is set during timeout it will be catched during next run and is not lost
                 # there is a job that shall be processed, now wait until we get a falling clock
                 # timeout not None (to avoid blocking) but longer than any frame could ever take
-                self._gpio_backend.wait_for_clock_fall_signal(timeout=1)
+                try:
+                    self._gpio_backend.wait_for_clock_fall_signal(timeout=1)
+                except TimeoutError:
+                    logger.error("clock signal missing.")
+                    break  # leave and allow to restart device.
                 # clock is fallen, this is the sync point to send out trigger to other clients. chosen to send on falling clock because capture
                 # shall be on rising clock and this is with 1/2 frame distance far enough that all clients can prepare to capture
                 self._gpio_backend.set_trigger_out(True)  # clients detect rising edge on trigger_in and invoke capture.
                 # now we wait until next falling clock and turn off the trigger
                 # timeout not None (to avoid blocking) but longer than any frame could ever take
-                self._gpio_backend.wait_for_clock_fall_signal(timeout=1)
+                try:
+                    self._gpio_backend.wait_for_clock_fall_signal(timeout=1)
+                except TimeoutError:
+                    logger.error("clock signal missing.")
+                    break  # leave and allow to restart device.
+
                 self._gpio_backend.set_trigger_out(False)
                 # done, restart waiting for flag...
             else:
                 pass
                 # just timed out, nothing to take care about.
+
+        logger.info("left _trigger_out_fun")  # if left, it allows supervisor to restart if needed.

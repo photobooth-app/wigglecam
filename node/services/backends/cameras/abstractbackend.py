@@ -27,9 +27,6 @@ class StreamingOutput(io.BufferedIOBase):
 
 class AbstractCameraBackend(ABC):
     def __init__(self):
-        # used to abort threads when service is stopped.
-        self._is_running: bool = None
-
         # declare common abstract props
         self._nominal_framerate: int = None
         self._queue_timestamp_monotonic_ns: Queue = None
@@ -45,7 +42,7 @@ class AbstractCameraBackend(ABC):
 
     @abstractmethod
     def start(self, nominal_framerate: int = None):
-        self._is_running: bool = True
+        logger.debug(f"{self.__module__} start called")
 
         if not nominal_framerate:
             # if 0 or None, fail!
@@ -56,7 +53,7 @@ class AbstractCameraBackend(ABC):
 
     @abstractmethod
     def stop(self):
-        self._is_running: bool = False
+        logger.debug(f"{self.__module__} stop called")
 
     def do_capture(self, filename: str = None, number_frames: int = 1):
         self._capture.set()
