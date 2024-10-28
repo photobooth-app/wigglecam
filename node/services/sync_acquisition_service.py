@@ -42,10 +42,10 @@ class SyncedAcquisitionService(BaseService):
         self._trigger_thread: Thread = None
         self._job: CaptureJob = None
         self._device_is_running: bool = None
-        self._flag_execute_job: Event = None
+        self._flag_trigger_out: Event = None
 
         # initialize private properties.
-        self._flag_execute_job: Event = Event()
+        self._flag_trigger_out: Event = Event()
 
     def start(self):
         super().start()
@@ -119,8 +119,8 @@ class SyncedAcquisitionService(BaseService):
     def setup_job(self, job: CaptureJob):
         self._job = job
 
-    def execute_job(self):
-        self._flag_execute_job.set()
+    def set_trigger_out(self):
+        self._flag_trigger_out.set()
 
     def _device_start(self, derived_fps: int):
         self._device_is_running = True
@@ -208,6 +208,9 @@ class SyncedAcquisitionService(BaseService):
     def _capture_fun(self):
         while self._device_is_running:
             self._gpio_backend.wait_for_trigger_signal(timeout=None)
+            # TODO: this needs to be able to timeout and finish finally. QUEUE?
+            # otherwise threads are orphaned after restarted by supervisor!
+            # TODO: need to join all threads!
 
             # useful if mobile camera is without any interconnection to a concentrator that could setup a job
             if self._config.allow_standalone_job:
@@ -228,10 +231,10 @@ class SyncedAcquisitionService(BaseService):
     def _trigger_fun(self):
         while self._device_is_running:
             # wait until execute job is requested
-            if self._flag_execute_job.wait(timeout=1):
+            if self._flag_trigger_out.wait(timeout=1):
                 # first clear to avoid endless loops
-                self._flag_execute_job.clear()
-                logger.info("executing job")
+                self._flag_trigger_out.clear()
+                logger.info("send trigger_out to start processing job")
                 # timeout=anything so it doesnt block shutdown. If flag is set during timeout it will be catched during next run and is not lost
                 # there is a job that shall be processed, now wait until we get a falling clock
                 # timeout not None (to avoid blocking) but longer than any frame could ever take
