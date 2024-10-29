@@ -9,7 +9,6 @@ from libcamera import Transform, controls
 from picamera2 import Picamera2, Preview
 from picamera2.encoders import MJPEGEncoder, Quality
 from picamera2.outputs import FileOutput
-from PIL import Image
 
 from ....utils.stoppablethread import StoppableThread
 from ...config.models import ConfigBackendPicamera2
@@ -209,10 +208,11 @@ class Picamera2Backend(AbstractCameraBackend):
                 break
 
             if self._capture.is_set():
+                tms = time.time()
                 self._capture.clear()
                 adjust_cycle_counter = 0  # don't adjust right after capture.
-                self._queue_processing.put(request.make_image("main"))  # make_array/make_buffer/make_image: what is most efficient?
-                logger.info("queued up buffer to process image")
+                self._queue_processing.put(request.make_buffer("main"))
+                logger.info(f"queued up buffer to process image, time taken: {round((time.time() - tms)*1.0e3, 0)}ms")
 
             picam_metadata = request.get_metadata()
             request.release()
@@ -266,11 +266,11 @@ class Picamera2Backend(AbstractCameraBackend):
 
     def _processing_fun(self):
         logger.debug("starting _processing_fun")
-        img_to_compress: Image = None
+        buffer_to_proc = None
 
         while not current_thread().stopped():
             try:
-                img_to_compress: Image = self._queue_processing.get(block=True, timeout=1.0)
+                buffer_to_proc = self._queue_processing.get(block=True, timeout=1.0)
                 logger.info("got img off queue, jpg proc start")
             except Empty:
                 continue  # just continue but allow .stopped to exit after 1.0 sec latest...
@@ -282,7 +282,8 @@ class Picamera2Backend(AbstractCameraBackend):
             logger.info(f"{filepath=}")
 
             tms = time.time()
-            img_to_compress.save(filepath.with_suffix(".jpg"), quality=self._config.original_still_quality)
+            image = self._picamera2.helpers.make_image(buffer_to_proc, self._picamera2.camera_config["main"])
+            image.save(filepath.with_suffix(".jpg"), quality=self._config.original_still_quality)
             logger.info(f"jpg compression finished, time taken: {round((time.time() - tms)*1.0e3, 0)}ms")
 
         logger.error("left _processing_fun. it's not restarted...")
