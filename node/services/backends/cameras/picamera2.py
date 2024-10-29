@@ -6,7 +6,6 @@ from queue import Empty, Queue
 from threading import current_thread
 
 import cv2
-import simplejpeg
 from libcamera import Transform, controls
 from picamera2 import Picamera2, Preview
 from picamera2.encoders import MJPEGEncoder, Quality
@@ -284,16 +283,10 @@ class Picamera2Backend(AbstractCameraBackend):
             logger.info(f"{filepath=}")
 
             tms = time.time()
+            # TODO: it would be great if we could avoid using cv2 to convert 420 to RGB because it's only used here
+            # and needs memory in pizero. Picamera2 YUV2RGB doesn't work yet for some reason.
             array_to_compress = cv2.cvtColor(array_to_compress, cv2.COLOR_YUV420p2RGB)
-            with open(filepath.with_suffix(".jpg"), "wb") as f:
-                f.write(
-                    simplejpeg.encode_jpeg(
-                        array_to_compress,
-                        quality=self._config.original_still_quality,
-                        colorspace="RGB",
-                        colorsubsampling="420",
-                    )
-                )
+            cv2.imwrite(filepath.with_suffix(".jpg"), array_to_compress, [int(cv2.IMWRITE_JPEG_QUALITY), self._config.original_still_quality])
 
             logger.info(f"jpg compression finished, time taken: {round((time.time() - tms)*1.0e3, 0)}ms")
 
