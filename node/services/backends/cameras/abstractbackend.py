@@ -49,7 +49,7 @@ class AbstractCameraBackend(ABC):
             raise RuntimeError("nominal framerate needs to be given!")
 
         self._nominal_framerate = nominal_framerate
-        self._queue_timestamp_monotonic_ns: Queue = Queue(maxsize=2)
+        self._queue_timestamp_monotonic_ns: Queue = Queue(maxsize=1)
 
     @abstractmethod
     def stop(self):
@@ -66,7 +66,7 @@ class AbstractCameraBackend(ABC):
         try:
             self._queue_timestamp_monotonic_ns.put_nowait(timestamp_ns)
         except Full:
-            logger.info("could not queue timestamp - camera not started, busy or nominal fps to close to cameras max mode fps?")
+            logger.info("could not queue timestamp - camera_thread not started, busy, overload or nominal fps to close to cameras max mode fps?")
 
     def request_tick(self):
         self._event_request_tick.set()

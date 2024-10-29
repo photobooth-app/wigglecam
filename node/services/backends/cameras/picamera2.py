@@ -202,11 +202,17 @@ class Picamera2Backend(AbstractCameraBackend):
             self._event_request_tick.clear()
             capture_time_assigned_timestamp_ns = 0
 
+            try:
+                capture_time_assigned_timestamp_ns = self._queue_timestamp_monotonic_ns.get(block=True, timeout=2.0)
+            except Empty:
+                logger.error("queue was empty!")
+                pass
+
             job = self._picamera2.capture_request(wait=False)
 
             try:
                 request = self._picamera2.wait(job, timeout=2.0)
-                capture_time_assigned_timestamp_ns = self._queue_timestamp_monotonic_ns.get(block=True, timeout=2.0)
+                # capture_time_assigned_timestamp_ns = self._queue_timestamp_monotonic_ns.get(block=True, timeout=2.0)
             except (Empty, TimeoutError):  # no information in exc avail so omitted
                 logger.warning("timeout while waiting for clock/camera")
                 # break thread run loop, so the function will quit and .alive is false for this thread -
@@ -224,20 +230,16 @@ class Picamera2Backend(AbstractCameraBackend):
             request.release()
 
             timestamp_delta_ns = picam_metadata["SensorTimestamp"] - capture_time_assigned_timestamp_ns  # in ns
-
-            if (timestamp_delta_ns / 1.0e9) < -(0.5 / self._nominal_framerate):
-                logger.warning("image is older than 1/2 frameduration. dropping one frame trying to catch up")
-                self._picamera2.capture_metadata()
-                adjust_cycle_counter = 0  # don't adjust right after capture.
-
-            if (timestamp_delta_ns / 1.0e9) > +(0.5 / self._nominal_framerate):
-                logger.warning("ref clock is older than 1/2 frameduration. dropping timestamp queue until catched up")
-                while True:
-                    try:
-                        self._queue_timestamp_monotonic_ns.get_nowait()
-                    except Empty:
-                        adjust_cycle_counter = 0  # don't adjust right after capture.
-                        break
+            print(
+                f"timestamp clk/sensor=({round((capture_time_assigned_timestamp_ns)/1e6,1)}/"
+                f"{round(picam_metadata['SensorTimestamp']/1e6,1)}) ms, "
+                f"delta={round((timestamp_delta_ns)/1e6,1)} ms, "
+            )
+            # if (timestamp_delta_ns / 1.0e9) < -(0.5 / self._nominal_framerate):
+            #     logger.warning("image is older than 1/2 frameduration. dropping one frame trying to catch up")
+            #     self._picamera2.capture_metadata()
+            #     adjust_cycle_counter = 0  # don't adjust right after capture.
+            #     continue
 
             if adjust_cycle_counter >= ADJUST_EVERY_X_CYCLE:
                 adjust_cycle_counter = 0
