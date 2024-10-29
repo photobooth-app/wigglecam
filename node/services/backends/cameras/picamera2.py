@@ -5,6 +5,8 @@ from pathlib import Path
 from queue import Empty, Queue
 from threading import current_thread
 
+import cv2
+import simplejpeg
 from libcamera import Transform, controls
 from picamera2 import Picamera2, Preview
 from picamera2.encoders import MJPEGEncoder, Quality
@@ -33,12 +35,12 @@ class Picamera2Backend(AbstractCameraBackend):
         self._adjust_sync_offset: int = 0
         self._camera_thread: StoppableThread = None
         self._processing_thread: StoppableThread = None
-        self._queue_processing_img: Queue = None
+        self._queue_processing: Queue = None
         self._streaming_output: StreamingOutput = None
 
         # initialize private props
         self._streaming_output: StreamingOutput = StreamingOutput()
-        self._queue_processing_img: Queue = Queue()
+        self._queue_processing: Queue = Queue()
 
         logger.info(f"global_camera_info {Picamera2.global_camera_info()}")
 
@@ -56,8 +58,8 @@ class Picamera2Backend(AbstractCameraBackend):
         # configure; camera needs to be stopped before
         self._picamera2.configure(
             self._picamera2.create_still_configuration(
-                main={"size": (self._config.CAPTURE_CAM_RESOLUTION_WIDTH, self._config.CAPTURE_CAM_RESOLUTION_HEIGHT)},
-                lores={"size": (self._config.LIVEVIEW_RESOLUTION_WIDTH, self._config.LIVEVIEW_RESOLUTION_HEIGHT)},
+                main={"size": (self._config.CAPTURE_CAM_RESOLUTION_WIDTH, self._config.CAPTURE_CAM_RESOLUTION_HEIGHT), "format": "YUV420"},
+                lores={"size": (self._config.LIVEVIEW_RESOLUTION_WIDTH, self._config.LIVEVIEW_RESOLUTION_HEIGHT), "format": "YUV420"},
                 encode="lores",
                 display="lores",
                 buffer_count=2,
@@ -211,7 +213,7 @@ class Picamera2Backend(AbstractCameraBackend):
             if self._capture.is_set():
                 self._capture.clear()
                 adjust_cycle_counter = 0  # don't adjust right after capture.
-                self._queue_processing_img.put(request.make_image("main"))  # make_array/make_buffer/make_image: what is most efficient?
+                self._queue_processing.put(request.make_array("main"))  # make_array/make_buffer/make_image: what is most efficient?
                 logger.info("queued up buffer to process image")
 
             picam_metadata = request.get_metadata()
@@ -266,12 +268,12 @@ class Picamera2Backend(AbstractCameraBackend):
 
     def _processing_fun(self):
         logger.debug("starting _processing_fun")
-        img_to_compress: Image = None
+        array_to_compress = None
 
         while not current_thread().stopped():
             try:
-                img_to_compress: Image = self._queue_processing_img.get(block=True, timeout=1.0)
-                logger.info("got img off queue, jpg proc start")
+                array_to_compress: Image = self._queue_processing.get(block=True, timeout=1.0)
+                logger.info("got encode job off queue, jpg proc start")
             except Empty:
                 continue  # just continue but allow .stopped to exit after 1.0 sec latest...
 
@@ -282,5 +284,17 @@ class Picamera2Backend(AbstractCameraBackend):
             logger.info(f"{filepath=}")
 
             tms = time.time()
-            img_to_compress.save(filepath.with_suffix(".jpg"), quality=self._config.original_still_quality)
+            array_to_compress = cv2.cvtColor(array_to_compress, cv2.COLOR_YUV420p2RGB)
+            with open(filepath.with_suffix(".jpg"), "wb") as f:
+                f.write(
+                    simplejpeg.encode_jpeg(
+                        array_to_compress,
+                        quality=self._config.original_still_quality,
+                        colorspace="RGB",
+                        colorsubsampling="420",
+                    )
+                )
+
             logger.info(f"jpg compression finished, time taken: {round((time.time() - tms)*1.0e3, 0)}ms")
+
+        logger.error("_processing_fun quit, it does not recover from this error!")

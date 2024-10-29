@@ -40,6 +40,7 @@ dependencies = [
     "uvicorn",
     "gpiod>=2.2.1",
     "opencv-python",
+    "simplejpeg>=1.7.4", # might be installed globally already on Pi but in older version incompatible to numpy2. used internally by picamera2
 ]
 
 
@@ -62,7 +63,6 @@ test = [
   "pytest-cov>=4.1.0",
   "coverage[toml]>=7.4.0",
   "numpy>=2.0.0",
-  "simplejpeg>=1.7.4", # might be installed globally already on Pi but in older version incompatible to numpy2. used internally by picamera2
 ]
 lint = [
   "ruff"
