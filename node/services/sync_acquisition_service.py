@@ -168,11 +168,12 @@ class SyncedAcquisitionService(BaseService):
             self._sync_thread.join()
 
     def _device_alive(self):
+        camera_alive = self._camera_backend.camera_alive()
         trigger_out_alive = self._trigger_out_thread and self._trigger_out_thread.is_alive()
         trigger_in_alive = self._trigger_in_thread and self._trigger_in_thread.is_alive()
         sync_alive = self._sync_thread and self._sync_thread.is_alive()
 
-        return trigger_out_alive and trigger_in_alive and sync_alive
+        return camera_alive and trigger_out_alive and trigger_in_alive and sync_alive
 
     def _clock_impulse_detected(self, timeout: float = None):
         try:

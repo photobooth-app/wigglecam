@@ -34,6 +34,47 @@ pipx ensurepath # reboot afterwards!
 pipx install --system-site-packages git+https://github.com/photobooth-app/wigglecam.git
 ```
 
+#### Optimize Memory for Pi Zero 2
+
+Before
+    total: 427
+started: 
+    avail: 303
+    swap used: 2
+app started and in idle:
+    avail: 87
+    swap used: 77
+app started some photos taken:
+    avail: 200
+    swap used: 150
+
+After
+    total: 459
+started: 
+    avail: 330
+    swap used: 0
+app started and in idle:
+    avail: 106
+    swap used: 2
+app started some photos taken:
+    total: 200
+    swap used: 25
+
+```sh
+sudo systemctl disable apt-daily-upgrade.timer
+sudo systemctl disable apt-daily-upgrade.service
+sudo systemctl disable apt-daily.timer
+sudo systemctl disable apt-daily.service
+```
+
+```ini
+gpu_mem=32
+arm_boost=0
+max_framebuffers=1
+dtoverlay=disable-bt
+dtparam=audio=off
+```
+
 #### Basic configuration
 
 On all systems edit `/boot/firmware/config.txt` as follows:

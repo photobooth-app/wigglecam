@@ -55,6 +55,10 @@ class AbstractCameraBackend(ABC):
     def stop(self):
         logger.debug(f"{self.__module__} stop called")
 
+    @abstractmethod
+    def camera_alive(self) -> bool:
+        pass
+
     def do_capture(self, filename: str = None, number_frames: int = 1):
         self._capture.set()
 

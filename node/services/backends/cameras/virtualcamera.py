@@ -29,6 +29,9 @@ class VirtualCameraBackend(AbstractCameraBackend):
     def stop(self):
         super().stop()
 
+    def camera_alive(self):
+        return True
+
     def start_stream(self):
         pass
 

@@ -121,6 +121,12 @@ class Picamera2Backend(AbstractCameraBackend):
 
         logger.debug(f"{self.__module__} stopped")
 
+    def camera_alive(self) -> bool:
+        camera_alive = self._camera_thread and self._camera_thread.is_alive()
+        processing_alive = self._processing_thread and self._processing_thread.is_alive()
+
+        return camera_alive and processing_alive
+
     def start_stream(self):
         self._picamera2.stop_recording()
         encoder = MJPEGEncoder()
@@ -286,4 +292,4 @@ class Picamera2Backend(AbstractCameraBackend):
             image.save(filepath.with_suffix(".jpg"), quality=self._config.original_still_quality)
             logger.info(f"jpg compression finished, time taken: {round((time.time() - tms)*1.0e3, 0)}ms")
 
-        logger.error("left _processing_fun. it's not restarted...")
+        logger.info("_processing_fun left")
