@@ -1,7 +1,7 @@
 import io
 import logging
 from abc import ABC, abstractmethod
-from queue import Full, Queue
+from queue import Queue
 from threading import Condition, Event
 
 logger = logging.getLogger(__name__)
@@ -30,6 +30,7 @@ class AbstractCameraBackend(ABC):
         # declare common abstract props
         self._nominal_framerate: int = None
         self._queue_timestamp_monotonic_ns: Queue = None
+        self._timestamp_monotonic_ns: int = None
         self._event_request_tick: Event = None
         self._capture: Event = None
         self._capture_in_progress: bool = None
@@ -47,6 +48,7 @@ class AbstractCameraBackend(ABC):
 
         # init common abstract props
         self._nominal_framerate = nominal_framerate
+        self._timestamp_monotonic_ns: int = None
         self._queue_timestamp_monotonic_ns: Queue = Queue(maxsize=1)
         self._event_request_tick: Event = Event()
         self._capture = Event()
@@ -64,10 +66,11 @@ class AbstractCameraBackend(ABC):
         self._capture.set()
 
     def sync_tick(self, timestamp_ns: int):
-        try:
-            self._queue_timestamp_monotonic_ns.put_nowait(timestamp_ns)
-        except Full:
-            logger.info("could not queue timestamp - camera_thread not started, busy, overload or nominal fps to close to cameras max mode fps?")
+        self._timestamp_monotonic_ns = timestamp_ns
+        # try:
+        #     self._queue_timestamp_monotonic_ns.put_nowait(timestamp_ns)
+        # except Full:
+        #     logger.info("could not queue timestamp - camera_thread not started, busy, overload or nominal fps to close to cameras max mode fps?")
 
     def request_tick(self):
         self._event_request_tick.set()

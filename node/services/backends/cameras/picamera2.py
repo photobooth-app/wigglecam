@@ -204,7 +204,7 @@ class Picamera2Backend(AbstractCameraBackend):
         tms = time.time()
         for _ in range(4):  # 2 is size of buffer so tick->clear no processing.
             try:
-                self._queue_timestamp_monotonic_ns.get(block=True, timeout=2.0)
+                # self._queue_timestamp_monotonic_ns.get(block=True, timeout=2.0)
                 self._queue_camera_timestamp_ns.get(block=True, timeout=2.0)
             except Exception:
                 pass
@@ -229,8 +229,8 @@ class Picamera2Backend(AbstractCameraBackend):
                 adjust_cycle_counter = 0  # keep counter 0 until something is in progress and wait X_CYCLES until adjustment is done afterwards
 
             try:
-                capture_time_assigned_timestamp_ns = self._queue_timestamp_monotonic_ns.get(block=True, timeout=2)
                 capture_time_timestamp_ns = self._queue_camera_timestamp_ns.get(block=True, timeout=2)
+                capture_time_assigned_timestamp_ns = self._timestamp_monotonic_ns or 0
             except Empty:
                 logger.error("queue was empty despite barrier was hit!")
                 break
