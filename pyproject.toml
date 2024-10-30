@@ -39,6 +39,7 @@ dependencies = [
     "fastapi",
     "uvicorn",
     "gpiod>=2.2.1",
+    "opencv-python-headless",
 ]
 
 
