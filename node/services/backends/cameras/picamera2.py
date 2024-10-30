@@ -2,7 +2,7 @@ import logging
 import time
 from datetime import datetime
 from pathlib import Path
-from queue import Empty, Queue
+from queue import Empty, Full, Queue
 from threading import current_thread
 
 from libcamera import Transform, controls
@@ -32,7 +32,9 @@ class Picamera2Backend(AbstractCameraBackend):
         self._adjust_sync_offset: int = 0
         self._camera_thread: StoppableThread = None
         self._processing_thread: StoppableThread = None
+        self._align_thread: StoppableThread = None
         self._queue_processing: Queue = None
+        self._queue_camera_timestamp_ns: Queue = None
         self._streaming_output: StreamingOutput = None
 
         # initialize private props
@@ -91,11 +93,16 @@ class Picamera2Backend(AbstractCameraBackend):
 
         self._init_autofocus()
 
+        self._queue_camera_timestamp_ns: Queue = Queue(maxsize=1)
+
         self._processing_thread = StoppableThread(name="_processing_thread", target=self._processing_fun, args=(), daemon=True)
         self._processing_thread.start()
 
         self._camera_thread = StoppableThread(name="_camera_thread", target=self._camera_fun, args=(), daemon=True)
         self._camera_thread.start()
+
+        self._align_thread = StoppableThread(name="_align_thread", target=self._align_fun, args=(), daemon=True)
+        self._align_thread.start()
 
         logger.info(f"camera_config: {self._picamera2.camera_config}")
         logger.info(f"camera_controls: {self._picamera2.camera_controls}")
@@ -119,13 +126,18 @@ class Picamera2Backend(AbstractCameraBackend):
             self._processing_thread.stop()
             self._processing_thread.join()
 
+        if self._align_thread and self._align_thread.is_alive():
+            self._align_thread.stop()
+            self._align_thread.join()
+
         logger.debug(f"{self.__module__} stopped")
 
     def camera_alive(self) -> bool:
         camera_alive = self._camera_thread and self._camera_thread.is_alive()
         processing_alive = self._processing_thread and self._processing_thread.is_alive()
+        align_alive = self._align_thread and self._align_thread.is_alive()
 
-        return camera_alive and processing_alive
+        return camera_alive and processing_alive and align_alive
 
     def start_stream(self):
         self._picamera2.stop_recording()
@@ -188,87 +200,113 @@ class Picamera2Backend(AbstractCameraBackend):
     def clamp(n, min_value, max_value):
         return max(min_value, min(n, max_value))
 
-    def _camera_fun(self):
-        logger.debug("starting _camera_fun")
+    def recover(self):
+        tms = time.time()
+        for _ in range(2):  # 2 is size of buffer so tick->clear no processing.
+            pass
+            ## self._event_request_tick.wait(timeout=2.0)
+            self._queue_timestamp_monotonic_ns.get(block=True, timeout=2)
+            self._queue_camera_timestamp_ns.get(block=True, timeout=2)
+            ## self._picamera2.drop_frames(1, wait=True)  # on start drop all old frames...
+
+        logger.info(f"recovered, time taken: {round((time.time() - tms)*1.0e3, 0)}ms")
+
+    def _align_fun(self):
+        logger.debug("starting _align_fun")
         timestamp_delta_ns = 0
         adjust_cycle_counter = 0
         adjust_amount_us = 0
-        adjust_amount_clamped_us = 0
         capture_time_assigned_timestamp_ns = None
-        nominal_frame_duration_us = 1.0 / self._nominal_framerate * 1.0e6
+        nominal_frame_duration = 1.0 / self._nominal_framerate
+
+        self.recover()
 
         while not current_thread().stopped():
-            self._event_request_tick.wait(timeout=2.0)
-            self._event_request_tick.clear()
             capture_time_assigned_timestamp_ns = 0
+            capture_time_timestamp_ns = 0
+
+            if self._capture_in_progress:
+                adjust_cycle_counter = 0  # keep counter 0 until something is in progress and wait X_CYCLES until adjustment is done afterwards
 
             try:
-                capture_time_assigned_timestamp_ns = self._queue_timestamp_monotonic_ns.get(block=True, timeout=2.0)
+                capture_time_assigned_timestamp_ns = self._queue_timestamp_monotonic_ns.get(block=True, timeout=2)
+                capture_time_timestamp_ns = self._queue_camera_timestamp_ns.get(block=True, timeout=2)
             except Empty:
-                logger.error("queue was empty!")
-                pass
+                logger.error("queue was empty despite barrier was hit!")
+                break
+            except TimeoutError:
+                logger.error("TimeoutError")
+                break
 
+            timestamp_delta_ns = capture_time_timestamp_ns - capture_time_assigned_timestamp_ns  # in ns
+
+            if abs(timestamp_delta_ns) > (1.1e9 * nominal_frame_duration):
+                logger.info("delta big, recovering...")
+                adjust_cycle_counter = 0
+                self.recover()
+                logger.info("finished recover")
+                continue
+
+            if adjust_cycle_counter >= ADJUST_EVERY_X_CYCLE:
+                adjust_cycle_counter = 0
+                adjust_amount_us = -timestamp_delta_ns / 1.0e3
+            else:
+                adjust_cycle_counter += 1
+                adjust_amount_us = 0
+
+            with self._picamera2.controls as ctrl:
+                fixed_frame_duration = int(nominal_frame_duration * 1e6 + adjust_amount_us)
+                ctrl.FrameDurationLimits = (fixed_frame_duration,) * 2
+
+            THRESHOLD_LOG = 0
+            if abs(timestamp_delta_ns / 1.0e6) > THRESHOLD_LOG:
+                # even in debug reduce verbosity a bit if all is fine and within 2ms tolerance
+                logger.debug(
+                    f"🕑 clk/sensor/Δ/adjust=( "
+                    f"{(capture_time_assigned_timestamp_ns)/1e6:.1f} / "
+                    f"{capture_time_timestamp_ns/1e6:.1f} / "
+                    f"{timestamp_delta_ns/1e6:5.1f} / "
+                    f"{adjust_amount_us/1e3:5.1f}) ms"
+                    # f"FrameDuration={round(picam_metadata['FrameDuration']/1e3,1)} ms "
+                )
+            else:
+                pass
+                # silent
+
+        logger.info("_camera_fun left")
+
+    def _camera_fun(self):
+        logger.debug("starting _camera_fun")
+
+        while not current_thread().stopped():
             job = self._picamera2.capture_request(wait=False)
 
             try:
                 request = self._picamera2.wait(job, timeout=2.0)
-                # capture_time_assigned_timestamp_ns = self._queue_timestamp_monotonic_ns.get(block=True, timeout=2.0)
-            except (Empty, TimeoutError):  # no information in exc avail so omitted
+            except TimeoutError:  # no information in exc avail so omitted
                 logger.warning("timeout while waiting for clock/camera")
                 # break thread run loop, so the function will quit and .alive is false for this thread -
                 # supervisor could then decide to start it again.
                 break
 
             if self._capture.is_set():
-                tms = time.time()
                 self._capture.clear()
-                adjust_cycle_counter = 0  # don't adjust right after capture.
+                self._capture_in_progress = True
+
+                tms = time.time()
                 self._queue_processing.put(request.make_buffer("main"))
+                time.sleep(0.5)
                 logger.info(f"queued up buffer to process image, time taken: {round((time.time() - tms)*1.0e3, 0)}ms")
+                self._capture_in_progress = False
 
-            picam_metadata = request.get_metadata()
+            else:
+                picam_metadata = request.get_metadata()
+                try:
+                    self._queue_camera_timestamp_ns.put_nowait(picam_metadata["SensorTimestamp"])
+                except Full:
+                    logger.warning("could not queue camera timestamp!")
+
             request.release()
-
-            timestamp_delta_ns = picam_metadata["SensorTimestamp"] - capture_time_assigned_timestamp_ns  # in ns
-            print(
-                f"timestamp clk/sensor=({round((capture_time_assigned_timestamp_ns)/1e6,1)}/"
-                f"{round(picam_metadata['SensorTimestamp']/1e6,1)}) ms, "
-                f"delta={round((timestamp_delta_ns)/1e6,1)} ms, "
-            )
-            # if (timestamp_delta_ns / 1.0e9) < -(0.5 / self._nominal_framerate):
-            #     logger.warning("image is older than 1/2 frameduration. dropping one frame trying to catch up")
-            #     self._picamera2.capture_metadata()
-            #     adjust_cycle_counter = 0  # don't adjust right after capture.
-            #     continue
-
-            if adjust_cycle_counter >= ADJUST_EVERY_X_CYCLE:
-                adjust_cycle_counter = 0
-                adjust_amount_us = timestamp_delta_ns / 1.0e3
-                adjust_amount_clamped_us = self.clamp(adjust_amount_us, -0.9 * nominal_frame_duration_us, 0.9 * nominal_frame_duration_us)
-            else:
-                adjust_cycle_counter += 1
-                adjust_amount_us = 0
-                adjust_amount_clamped_us = 0
-
-            with self._picamera2.controls as ctrl:
-                fixed_frame_duration = int(nominal_frame_duration_us - adjust_amount_clamped_us)
-                ctrl.FrameDurationLimits = (fixed_frame_duration,) * 2
-
-            THRESHOLD_LOG = 1.0
-            if abs(timestamp_delta_ns / 1.0e6) > THRESHOLD_LOG:
-                # even in debug reduce verbosity a bit if all is fine and within 2ms tolerance
-                logger.debug(
-                    f"timestamp clk/sensor=({round((capture_time_assigned_timestamp_ns)/1e6,1)}/"
-                    f"{round(picam_metadata['SensorTimestamp']/1e6,1)}) ms, "
-                    f"delta={round((timestamp_delta_ns)/1e6,1)} ms, "
-                    f"adj_cycle_cntr={adjust_cycle_counter}, "
-                    f"adjust_amount={round(adjust_amount_us/1e3,1)} ms "
-                    f"adjust_amount_clamped={round(adjust_amount_clamped_us/1e3,1)} ms "
-                    f"FrameDuration={round(picam_metadata['FrameDuration']/1e3,1)} ms "
-                )
-            else:
-                pass
-                # silent
 
         logger.info("_camera_fun left")
 

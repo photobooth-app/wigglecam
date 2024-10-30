@@ -32,10 +32,7 @@ class AbstractCameraBackend(ABC):
         self._queue_timestamp_monotonic_ns: Queue = None
         self._event_request_tick: Event = None
         self._capture: Event = None
-
-        # init common abstract props
-        self._event_request_tick: Event = Event()
-        self._capture = Event()
+        self._capture_in_progress: bool = None
 
     def __repr__(self):
         return f"{self.__class__}"
@@ -48,8 +45,12 @@ class AbstractCameraBackend(ABC):
             # if 0 or None, fail!
             raise RuntimeError("nominal framerate needs to be given!")
 
+        # init common abstract props
         self._nominal_framerate = nominal_framerate
         self._queue_timestamp_monotonic_ns: Queue = Queue(maxsize=1)
+        self._event_request_tick: Event = Event()
+        self._capture = Event()
+        self._capture_in_progress = False
 
     @abstractmethod
     def stop(self):
