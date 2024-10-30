@@ -202,12 +202,12 @@ class Picamera2Backend(AbstractCameraBackend):
 
     def recover(self):
         tms = time.time()
-        for _ in range(2):  # 2 is size of buffer so tick->clear no processing.
-            pass
-            ## self._event_request_tick.wait(timeout=2.0)
-            self._queue_timestamp_monotonic_ns.get(block=True, timeout=2)
-            self._queue_camera_timestamp_ns.get(block=True, timeout=2)
-            ## self._picamera2.drop_frames(1, wait=True)  # on start drop all old frames...
+        for _ in range(4):  # 2 is size of buffer so tick->clear no processing.
+            try:
+                self._queue_timestamp_monotonic_ns.get(block=True, timeout=2.0)
+                self._queue_camera_timestamp_ns.get(block=True, timeout=2.0)
+            except Exception:
+                pass
 
         logger.info(f"recovered, time taken: {round((time.time() - tms)*1.0e3, 0)}ms")
 
@@ -279,34 +279,21 @@ class Picamera2Backend(AbstractCameraBackend):
         logger.debug("starting _camera_fun")
 
         while not current_thread().stopped():
-            job = self._picamera2.capture_request(wait=False)
-
-            try:
-                request = self._picamera2.wait(job, timeout=2.0)
-            except TimeoutError:  # no information in exc avail so omitted
-                logger.warning("timeout while waiting for clock/camera")
-                # break thread run loop, so the function will quit and .alive is false for this thread -
-                # supervisor could then decide to start it again.
-                break
-
             if self._capture.is_set():
                 self._capture.clear()
                 self._capture_in_progress = True
 
                 tms = time.time()
-                self._queue_processing.put(request.make_buffer("main"))
-                time.sleep(0.5)
+                self._queue_processing.put(self._picamera2.capture_buffer("main", wait=2.0))
                 logger.info(f"queued up buffer to process image, time taken: {round((time.time() - tms)*1.0e3, 0)}ms")
                 self._capture_in_progress = False
 
             else:
-                picam_metadata = request.get_metadata()
+                picam_metadata = self._picamera2.capture_metadata(wait=2.0)
                 try:
                     self._queue_camera_timestamp_ns.put_nowait(picam_metadata["SensorTimestamp"])
                 except Full:
                     logger.warning("could not queue camera timestamp!")
-
-            request.release()
 
         logger.info("_camera_fun left")
 
