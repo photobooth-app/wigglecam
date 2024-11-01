@@ -2,6 +2,7 @@
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI
@@ -13,6 +14,7 @@ from .__version__ import __version__
 from .common_utils import create_basic_folders
 from .container import container
 from .routers import api
+from .routers.static import static_router
 
 logger = logging.getLogger(f"{__name__}")
 
@@ -46,9 +48,12 @@ def _create_app() -> FastAPI:
         dependencies=[],
         lifespan=lifespan,
     )
+    _app.include_router(static_router)
     _app.include_router(api.router)
     # serve data directory holding images, thumbnails, ...
     _app.mount("/media", StaticFiles(directory="media"), name="media")
+    # if not match anything above, default to deliver static files from web directory
+    _app.mount("/", StaticFiles(directory=Path(__file__).parent.resolve().joinpath("web_spa")), name="web_spa")
 
     async def custom_http_exception_handler(request, exc):
         logger.error(f"HTTPException: {repr(exc)}")

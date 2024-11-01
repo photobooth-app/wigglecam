@@ -45,7 +45,7 @@ class VirtualIoBackend(AbstractIoBackend):
 
         while not current_thread().stopped():
             time.sleep((1.0 / self._config.fps_nominal) / 2.0)
-            self._on_clock_rise_in()
+            self._on_clock_rise_in(time.monotonic_ns())
             time.sleep((1.0 / self._config.fps_nominal) / 2.0)
             self._on_clock_fall_in()
 
