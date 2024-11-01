@@ -28,9 +28,9 @@ class Button(ZeroButton):
 
 
 def main(args=None, run: bool = True):
-    from .container import container
-
     args = parser.parse_args(args)  # parse here, not above because pytest system exit 2
+
+    from .container import container
 
     try:
         create_basic_folders()
