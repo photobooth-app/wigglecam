@@ -56,6 +56,3 @@ class VirtualCameraBackend(AbstractCameraBackend):
         if self._tick_tock_counter > 10:
             self._tick_tock_counter = 0
             logger.debug("tick")
-
-    def request_tick(self):
-        pass

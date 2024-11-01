@@ -1,8 +1,8 @@
 import io
 import logging
 from abc import ABC, abstractmethod
-from queue import Queue
-from threading import Barrier, Condition, Event
+from dataclasses import dataclass
+from threading import Barrier, BrokenBarrierError, Condition, Event
 
 logger = logging.getLogger(__name__)
 
@@ -25,27 +25,36 @@ class StreamingOutput(io.BufferedIOBase):
             self.condition.notify_all()
 
 
+@dataclass
+class TimestampSet:
+    """Set of timestamps that shall be aligned to each other."""
+
+    reference: int  # in nanoseconds
+    camera: int  # in nanoseconds
+
+
 class AbstractCameraBackend(ABC):
     def __init__(self):
         # declare common abstract props
         self._nominal_framerate: int = None
-        self._queue_timestamp_monotonic_ns: Queue = None
-        self._timestamp_monotonic_ns: int = None
-        self._event_request_tick: Event = None
         self._capture: Event = None
         self._capture_in_progress: bool = None
-
-        self._barrier = Barrier(3, action=self.get_timestamps)
+        self._barrier: Barrier = None
+        self._current_timestampset: TimestampSet = None
+        self._align_timestampset: TimestampSet = None
 
     def __repr__(self):
         return f"{self.__class__}"
 
-    def get_timestamps(self):
-        capture_time_timestamp_ns = self._camera_timestamp_ns or 0
+    def get_timestamps_to_align(self) -> TimestampSet:
+        assert self._current_timestampset.reference is not None
+        assert self._current_timestampset.camera is not None
 
-        capture_time_assigned_timestamp_ns = self._timestamp_monotonic_ns or 0
-        capture_time_assigned_timestamp_ns -= (1.0 / self._nominal_framerate) * 1e9
-        self._align_timestamps = (capture_time_timestamp_ns, capture_time_assigned_timestamp_ns)
+        # shift reference to align with camera cycle
+        _current_timestampset_reference = self._current_timestampset.reference
+        # _current_timestampset_reference -= (1.0 / self._nominal_framerate) * 1e9
+
+        self._align_timestampset = TimestampSet(reference=_current_timestampset_reference, camera=self._current_timestampset.camera)
 
     @abstractmethod
     def start(self, nominal_framerate: int = None):
@@ -57,11 +66,11 @@ class AbstractCameraBackend(ABC):
 
         # init common abstract props
         self._nominal_framerate = nominal_framerate
-        self._timestamp_monotonic_ns: int = None
-        self._queue_timestamp_monotonic_ns: Queue = Queue(maxsize=1)
-        self._event_request_tick: Event = Event()
         self._capture = Event()
         self._capture_in_progress = False
+        self._barrier = Barrier(3, action=self.get_timestamps_to_align)
+        self._current_timestampset = TimestampSet(None, None)
+        self._align_timestampset = TimestampSet(None, None)
 
     @abstractmethod
     def stop(self):
@@ -75,17 +84,11 @@ class AbstractCameraBackend(ABC):
         self._capture.set()
 
     def sync_tick(self, timestamp_ns: int):
-        self._timestamp_monotonic_ns = timestamp_ns
-
-        self._barrier.wait()
-
-        # try:
-        #     self._queue_timestamp_monotonic_ns.put_nowait(timestamp_ns)
-        # except Full:
-        #     logger.info("could not queue timestamp - camera_thread not started, busy, overload or nominal fps to close to cameras max mode fps?")
-
-    def request_tick(self):
-        self._event_request_tick.set()
+        self._current_timestampset.reference = timestamp_ns
+        try:
+            self._barrier.wait()
+        except BrokenBarrierError:
+            logger.debug("sync barrier broke")
 
     @abstractmethod
     def start_stream(self):
