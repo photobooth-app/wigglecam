@@ -38,7 +38,7 @@ pipx install --system-site-packages git+https://github.com/photobooth-app/wiggle
 
 Before
     total: 427
-started: 
+started:
     avail: 303
     swap used: 2
 app started and in idle:
@@ -50,7 +50,7 @@ app started some photos taken:
 
 After
     total: 459
-started: 
+started:
     avail: 330
     swap used: 0
 app started and in idle:
@@ -201,4 +201,19 @@ pi@wigglecam-main:/sys/class/pwm/pwmchip2/pwm0 $ echo 100000000 > period
 pi@wigglecam-main:/sys/class/pwm/pwmchip2/pwm0 $ echo 50000000 > duty_cycle
 pi@wigglecam-main:/sys/class/pwm/pwmchip2/pwm0 $ echo 1 > enable
 pi@wigglecam-main:/sys/class/pwm/pwmchip2/pwm0 $ echo 0 > enable
+```
+
+## Local dev installation
+
+```sh
+cd ~
+git clone https://github.com/photobooth-app/wigglecam.git
+cd wigglecam
+
+# to allow system site packages be used in venv (picamera2)
+pdm venv create --force 3.11 --system-site-packages
+
+pdm install
+
+pdm run wigglecam_minimal # or wigglecam_api, maybe add QT_QPA_PLATFORM=linuxfb if display is used.
 ```
