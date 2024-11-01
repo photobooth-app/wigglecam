@@ -2,7 +2,7 @@ import io
 import logging
 from abc import ABC, abstractmethod
 from queue import Queue
-from threading import Condition, Event
+from threading import Barrier, Condition, Event
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +35,17 @@ class AbstractCameraBackend(ABC):
         self._capture: Event = None
         self._capture_in_progress: bool = None
 
+        self._barrier = Barrier(3, action=self.get_timestamps)
+
     def __repr__(self):
         return f"{self.__class__}"
+
+    def get_timestamps(self):
+        capture_time_timestamp_ns = self._camera_timestamp_ns or 0
+
+        capture_time_assigned_timestamp_ns = self._timestamp_monotonic_ns or 0
+        capture_time_assigned_timestamp_ns -= (1.0 / self._nominal_framerate) * 1e9
+        self._align_timestamps = (capture_time_timestamp_ns, capture_time_assigned_timestamp_ns)
 
     @abstractmethod
     def start(self, nominal_framerate: int = None):
@@ -67,6 +76,9 @@ class AbstractCameraBackend(ABC):
 
     def sync_tick(self, timestamp_ns: int):
         self._timestamp_monotonic_ns = timestamp_ns
+
+        self._barrier.wait()
+
         # try:
         #     self._queue_timestamp_monotonic_ns.put_nowait(timestamp_ns)
         # except Full:

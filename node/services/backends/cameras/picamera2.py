@@ -2,7 +2,7 @@ import logging
 import time
 from datetime import datetime
 from pathlib import Path
-from queue import Empty, Full, Queue
+from queue import Empty, Queue
 from threading import current_thread
 
 from libcamera import Transform, controls
@@ -94,6 +94,7 @@ class Picamera2Backend(AbstractCameraBackend):
         self._init_autofocus()
 
         self._queue_camera_timestamp_ns: Queue = Queue(maxsize=1)
+        self._camera_timestamp_ns: int = None
 
         self._processing_thread = StoppableThread(name="_processing_thread", target=self._processing_fun, args=(), daemon=True)
         self._processing_thread.start()
@@ -204,8 +205,10 @@ class Picamera2Backend(AbstractCameraBackend):
         tms = time.time()
         for _ in range(4):  # 2 is size of buffer so tick->clear no processing.
             try:
+                pass
                 # self._queue_timestamp_monotonic_ns.get(block=True, timeout=2.0)
-                self._queue_camera_timestamp_ns.get(block=True, timeout=2.0)
+                # self._queue_camera_timestamp_ns.get(block=True, timeout=2.0)
+                self._picamera2.drop_frames(1)
             except Exception:
                 pass
 
@@ -216,21 +219,23 @@ class Picamera2Backend(AbstractCameraBackend):
         timestamp_delta_ns = 0
         adjust_cycle_counter = 0
         adjust_amount_us = 0
-        capture_time_assigned_timestamp_ns = None
+        # capture_time_assigned_timestamp_ns = None
         nominal_frame_duration = 1.0 / self._nominal_framerate
 
         self.recover()
 
         while not current_thread().stopped():
-            capture_time_assigned_timestamp_ns = 0
-            capture_time_timestamp_ns = 0
+            # capture_time_assigned_timestamp_ns = 0
+            # capture_time_timestamp_ns = 0
 
             if self._capture_in_progress:
                 adjust_cycle_counter = 0  # keep counter 0 until something is in progress and wait X_CYCLES until adjustment is done afterwards
 
             try:
-                capture_time_timestamp_ns = self._queue_camera_timestamp_ns.get(block=True, timeout=2)
-                capture_time_assigned_timestamp_ns = self._timestamp_monotonic_ns or 0
+                self._barrier.wait()
+                # print(self._align_timestamps)
+                # capture_time_timestamp_ns = self._camera_timestamp_ns or 0
+                # capture_time_assigned_timestamp_ns = self._timestamp_monotonic_ns or 0
             except Empty:
                 logger.error("queue was empty despite barrier was hit!")
                 break
@@ -238,14 +243,14 @@ class Picamera2Backend(AbstractCameraBackend):
                 logger.error("TimeoutError")
                 break
 
-            timestamp_delta_ns = capture_time_timestamp_ns - capture_time_assigned_timestamp_ns  # in ns
+            timestamp_delta_ns = self._align_timestamps[0] - self._align_timestamps[1]  # in ns
 
-            if abs(timestamp_delta_ns) > (1.1e9 * nominal_frame_duration):
-                logger.info("delta big, recovering...")
-                adjust_cycle_counter = 0
-                self.recover()
-                logger.info("finished recover")
-                continue
+            # if abs(timestamp_delta_ns) > (1.1e9 * nominal_frame_duration):
+            #     logger.info("delta big, recovering...")
+            #     adjust_cycle_counter = 0
+            #     self.recover()
+            #     logger.info("finished recover")
+            #     continue
 
             if adjust_cycle_counter >= ADJUST_EVERY_X_CYCLE:
                 adjust_cycle_counter = 0
@@ -263,8 +268,8 @@ class Picamera2Backend(AbstractCameraBackend):
                 # even in debug reduce verbosity a bit if all is fine and within 2ms tolerance
                 logger.debug(
                     f"🕑 clk/sensor/Δ/adjust=( "
-                    f"{(capture_time_assigned_timestamp_ns)/1e6:.1f} / "
-                    f"{capture_time_timestamp_ns/1e6:.1f} / "
+                    f"{(self._align_timestamps[1])/1e6:.1f} / "
+                    f"{self._align_timestamps[0]/1e6:.1f} / "
                     f"{timestamp_delta_ns/1e6:5.1f} / "
                     f"{adjust_amount_us/1e3:5.1f}) ms"
                     # f"FrameDuration={round(picam_metadata['FrameDuration']/1e3,1)} ms "
@@ -290,10 +295,13 @@ class Picamera2Backend(AbstractCameraBackend):
 
             else:
                 picam_metadata = self._picamera2.capture_metadata(wait=2.0)
-                try:
-                    self._queue_camera_timestamp_ns.put_nowait(picam_metadata["SensorTimestamp"])
-                except Full:
-                    logger.warning("could not queue camera timestamp!")
+
+                self._camera_timestamp_ns = picam_metadata["SensorTimestamp"]
+                self._barrier.wait()
+                # try:
+                #     self._queue_camera_timestamp_ns.put_nowait(picam_metadata["SensorTimestamp"])
+                # except Full:
+                #     logger.warning("could not queue camera timestamp!")
 
         logger.info("_camera_fun left")
 
