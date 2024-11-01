@@ -125,8 +125,8 @@ Edit `~/.env.primary` and place following for the reference 3d printed wigglecam
 
 ```sh
 # enable clock generator on primary:
-syncedacquisition__io_backends__gpio__enable_clock="True"
-syncedacquisition__io_backends__gpio__fps_nominal=9
+syncedacquisition__io_backends__gpio__is_primary="True"
+syncedacquisition__io_backends__gpio__fps_nominal=5
 syncedacquisition__io_backends__gpio__pwmchip="pwmchip0" # or pwmchip2 for Pi5
 syncedacquisition__io_backends__gpio__pwm_channel=0 # or 2 for Pi5
 # primary is also preview display device:
