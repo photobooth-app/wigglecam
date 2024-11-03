@@ -101,6 +101,9 @@ class AbstractCameraBackend(ABC):
     def stop(self):
         logger.debug(f"{self.__module__} stop called")
 
+        if self._barrier:
+            self._barrier.abort()
+
         if self._align_thread and self._align_thread.is_alive():
             self._align_thread.stop()
             self._align_thread.join()

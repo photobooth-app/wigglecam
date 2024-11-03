@@ -102,9 +102,6 @@ class Picamera2Backend(AbstractCameraBackend):
     def stop(self):
         super().stop()
 
-        if self._barrier:
-            self._barrier.abort()
-
         if self._picamera2:
             self._picamera2.stop()
             self._picamera2.close()  # need to close camera so it can be used by other processes also (or be started again)
