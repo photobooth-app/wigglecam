@@ -23,7 +23,7 @@ def setup_job(job_request: JobRequest) -> JobItem:
 @router.get("/trigger")
 def trigger_job():
     """triggers a job that was setup before. this call needs to be sent to primary only and via GPIO the nodes will execute the job."""
-    container.job_service.trigger_execute_job()
+    return container.job_service.trigger_execute_job()
 
 
 @router.get("/list")

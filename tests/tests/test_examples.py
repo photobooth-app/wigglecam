@@ -12,6 +12,6 @@ def test_app():
 
 
 def test_main_instance():
-    import node.app_minimal
+    import examples.lowlevel.gpio
 
-    node.app_minimal.main([], False)
+    examples.lowlevel.gpio.main([], False)

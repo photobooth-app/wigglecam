@@ -11,7 +11,6 @@ from fastapi.exceptions import HTTPException, RequestValidationError
 from fastapi.staticfiles import StaticFiles
 
 from .__version__ import __version__
-from .common_utils import create_basic_folders
 from .container import container
 from .routers import api
 from .routers.static import static_router
@@ -31,12 +30,6 @@ async def lifespan(_: FastAPI):
 
 
 def _create_app() -> FastAPI:
-    try:
-        create_basic_folders()
-    except Exception as exc:
-        logger.critical(f"cannot create data folders, error: {exc}")
-        raise RuntimeError(f"cannot create data folders, error: {exc}") from exc
-
     _app = FastAPI(
         title="Wigglecam Node API",
         description="API may change any time.",

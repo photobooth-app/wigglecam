@@ -276,15 +276,14 @@ class SyncedAcquisitionService(BaseService):
                             filepath=backenditem.filepath,
                         )
                         self._queue_out.put(acquisitionitem)
+                        logger.info(f"put {acquisitionitem} on queue output")
+                        self._queue_in.task_done()
                     except Empty:
                         logger.info("all capture jobs received from backend...")
                         break  # leave inner processing loop, continue listen to trigger in outer.
                     except TimeoutError:
                         logger.info("timed out waiting for job to finish :(")
                         break
-
-                    logger.info("finished queue_acq_input processing")
-                    self._queue_in.task_done()
 
                 logger.info("trigger_in finished, waiting for next job")
 

@@ -1,4 +1,5 @@
 import logging
+import os
 
 from .services.baseservice import BaseService
 from .services.config import appconfig
@@ -9,12 +10,28 @@ from .services.sync_acquisition_service import SyncedAcquisitionService
 logger = logging.getLogger(__name__)
 
 
+def create_basic_folders():
+    os.makedirs("media", exist_ok=True)
+    os.makedirs("userdata", exist_ok=True)
+    os.makedirs("log", exist_ok=True)
+    os.makedirs("config", exist_ok=True)
+    os.makedirs("tmp", exist_ok=True)
+
+
 # and as globals module:
 class Container:
     # container
     logging_service = LoggingService(config=appconfig.logging)
     synced_acquisition_service = SyncedAcquisitionService(config=appconfig.syncedacquisition)
     job_service = JobService(config=appconfig.syncedacquisition, synced_acquisition_service=synced_acquisition_service)
+
+    def __init__(self):
+        # ensure dirs are avail
+        try:
+            create_basic_folders()
+        except Exception as exc:
+            logger.critical(f"cannot create data folders, error: {exc}")
+            raise RuntimeError(f"cannot create data folders, error: {exc}") from exc
 
     def _service_list(self) -> list[BaseService]:
         # list used to start/stop services. List sorted in the order of definition.

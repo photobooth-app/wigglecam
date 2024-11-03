@@ -3,9 +3,8 @@ import logging
 import sys
 import time
 
+from gpiozero import BadPinFactory
 from gpiozero import Button as ZeroButton
-
-from .common_utils import create_basic_folders
 
 logger = logging.getLogger(__name__)
 
@@ -30,13 +29,7 @@ class Button(ZeroButton):
 def main(args=None, run: bool = True):
     args = parser.parse_args(args)  # parse here, not above because pytest system exit 2
 
-    from .container import container
-
-    try:
-        create_basic_folders()
-    except Exception as exc:
-        logger.critical(f"cannot create data folders, error: {exc}")
-        raise RuntimeError(f"cannot create data folders, error: {exc}") from exc
+    from wigglecam.container import container
 
     logger.info("✨ ✨ starting app")
 
@@ -45,7 +38,11 @@ def main(args=None, run: bool = True):
 
     container.start()
 
-    _shutterbutton_in = Button(pin=shutter_pin, bounce_time=0.04)
+    try:
+        _shutterbutton_in = Button(pin=shutter_pin, bounce_time=0.04)
+    except BadPinFactory:
+        print("Device not supported by gpiozero 😣")
+        exit(-1)
     _shutterbutton_in.when_pressed = container.synced_acquisition_service.trigger_execute_job
     logger.info(f"external trigger button on {_shutterbutton_in}")
 

@@ -12,19 +12,19 @@ logger = logging.getLogger(name=None)
 
 
 def test_app():
-    import node.app_api
+    import wigglecam.__main__
 
-    assert node.app_api._create_app()
+    assert wigglecam.__main__._create_app()
 
 
 def test_main_instance():
-    import node.app_api
+    import wigglecam.__main__
 
-    node.app_api.main(False)
+    wigglecam.__main__.main(False)
 
 
 def test_main_instance_create_dirs_permission_error():
-    from node.app_api import create_basic_folders
+    from wigglecam.__main__ import create_basic_folders
 
     with patch.object(os, "makedirs", side_effect=RuntimeError("effect: failed creating folder")):
         # emulate write access issue and ensure an exception is received to make the app fail starting.
