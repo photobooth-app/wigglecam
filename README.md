@@ -203,6 +203,13 @@ pi@wigglecam-main:/sys/class/pwm/pwmchip2/pwm0 $ echo 1 > enable
 pi@wigglecam-main:/sys/class/pwm/pwmchip2/pwm0 $ echo 0 > enable
 ```
 
+### QT app
+
+```sh
+QT_DEBUG_PLUGINS=1 QT_MEDIA_BACKEND=ffmpeg QT_QPA_PLATFORM=linuxfb pdm run wigglecam-gui
+QT_DEBUG_PLUGINS=1 QT_MEDIA_BACKEND=gstreamer QT_QPA_PLATFORM=linuxfb pdm run wigglecam-gui
+```
+
 ## Local dev installation
 
 ```sh

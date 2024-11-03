@@ -1,20 +1,19 @@
 import logging
 import os
 
+from .services.acquisitionservice import AcquisitionService
 from .services.baseservice import BaseService
 from .services.config import appconfig
-from .services.jobservice import JobService
+from .services.jobconnectedservice import JobConnectedService
+from .services.jobstandaloneservice import JobStandaloneService
 from .services.loggingservice import LoggingService
-from .services.sync_acquisition_service import SyncedAcquisitionService
 
 logger = logging.getLogger(__name__)
 
 
 def create_basic_folders():
     os.makedirs("media", exist_ok=True)
-    os.makedirs("userdata", exist_ok=True)
     os.makedirs("log", exist_ok=True)
-    os.makedirs("config", exist_ok=True)
     os.makedirs("tmp", exist_ok=True)
 
 
@@ -22,8 +21,9 @@ def create_basic_folders():
 class Container:
     # container
     logging_service = LoggingService(config=appconfig.logging)
-    synced_acquisition_service = SyncedAcquisitionService(config=appconfig.syncedacquisition)
-    job_service = JobService(config=appconfig.syncedacquisition, synced_acquisition_service=synced_acquisition_service)
+    synced_acquisition_service = AcquisitionService(config=appconfig.syncedacquisition)
+    jobconnectedservice = JobConnectedService(config=appconfig.jobconnected, acquisition_service=synced_acquisition_service)
+    jobstandaloneservice = JobStandaloneService(config=appconfig.jobstandalone, acquisition_service=synced_acquisition_service)
 
     def __init__(self):
         # ensure dirs are avail

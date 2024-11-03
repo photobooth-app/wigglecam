@@ -7,9 +7,9 @@ from queue import Empty
 from threading import current_thread
 
 from ..utils.stoppablethread import StoppableThread
+from .acquisitionservice import AcqRequest, AcquisitionService
 from .baseservice import BaseService
-from .config.models import ConfigJob
-from .sync_acquisition_service import AcqRequest, SyncedAcquisitionService
+from .config.models import ConfigJobConnected
 
 logger = logging.getLogger(__name__)
 
@@ -51,17 +51,17 @@ class JobItem:
         return out
 
 
-class JobService(BaseService):
-    def __init__(self, config: ConfigJob, synced_acquisition_service: SyncedAcquisitionService):
+class JobConnectedService(BaseService):
+    def __init__(self, config: ConfigJobConnected, acquisition_service: AcquisitionService):
         super().__init__()
 
         # init the arguments
-        self._config: ConfigJob = config
-        self._synced_acquisition_service: SyncedAcquisitionService = synced_acquisition_service
+        self._config: ConfigJobConnected = config
+        self._acquisition_service: AcquisitionService = acquisition_service
 
         # declare private props
         self._db_jobs: list[JobItem] = []
-        self._sync_thread: StoppableThread = None
+        self._jobprocessor_thread: StoppableThread = None
         self._current_job: JobItem = None
 
         # ensure data directories exist
@@ -137,24 +137,24 @@ class JobService(BaseService):
         # add job to db and also put it into the queue to process
         for i in range(self._current_job.request.number_captures):
             acqrequest = AcqRequest(seq_no=i)
-            self._synced_acquisition_service._queue_in.put(acqrequest)
+            self._acquisition_service._queue_in.put(acqrequest)
 
         return self._current_job
 
     def trigger_execute_job(self):
         # TODO: all this should run only on primary device! it's not validated, the connector needs to ensure to call the right device currently.
         # maybe config can be changed in future and so also the _tirgger_out_thread is not started on secondary nodes.
-        self._synced_acquisition_service.trigger_execute_job()
+        self._acquisition_service.trigger_execute_job()
 
     def _jobprocessor_fun(self):
         logger.info("_jobprocessor_fun started")
 
         while not current_thread().stopped():
-            self._synced_acquisition_service._queue_in.join()
+            self._acquisition_service._queue_in.join()
 
             try:
                 # active waiting!
-                acqitem = self._synced_acquisition_service._queue_out.get(block=True, timeout=1)
+                acqitem = self._acquisition_service._queue_out.get(block=True, timeout=1)
                 if not self._current_job:
                     # job ran just by trigger on standalone basis. # will be removed later once app is separated properly.
                     continue

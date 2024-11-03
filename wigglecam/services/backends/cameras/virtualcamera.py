@@ -1,16 +1,13 @@
 import io
 import logging
 import time
-from datetime import datetime
-from pathlib import Path
-from queue import Empty
-from threading import BrokenBarrierError, current_thread
+from threading import BrokenBarrierError, Condition, current_thread
 
 import numpy
 from PIL import Image
 
 from ...config.models import ConfigBackendVirtualCamera
-from .abstractbackend import AbstractCameraBackend, BackendItem
+from .abstractbackend import AbstractCameraBackend
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +19,12 @@ class VirtualCameraBackend(AbstractCameraBackend):
         self._config = config
 
         # declarations
-        #
+        self._data_bytes: bytes = None
+        self._data_condition: Condition = None
 
         # initializiation
-        #
+        self._data_bytes: bytes = None
+        self._data_condition: Condition = Condition()
 
     def start(self, nominal_framerate: int = None):
         super().start(nominal_framerate=nominal_framerate)
@@ -44,6 +43,19 @@ class VirtualCameraBackend(AbstractCameraBackend):
     def stop_stream(self):
         pass
 
+    def wait_for_hires_frame(self):
+        return self.wait_for_lores_image()
+
+    def wait_for_hires_image(self, *args, **kwargs):
+        return super().wait_for_hires_image(*args, **kwargs)
+
+    def encode_frame_to_image(self, frame, format: str):
+        # for virtualcamera frame == jpeg data, so no convertion needed.
+        if format in ("jpg", "jpeg"):
+            return frame
+        else:
+            raise NotImplementedError
+
     def _produce_dummy_image(self):
         byte_io = io.BytesIO()
         imarray = numpy.random.rand(250, 250, 3) * 255
@@ -53,9 +65,13 @@ class VirtualCameraBackend(AbstractCameraBackend):
         return byte_io.getbuffer()
 
     def wait_for_lores_image(self):
-        time.sleep(1.0 / self._nominal_framerate)
+        """for other threads to receive a lores JPEG image"""
 
-        return self._produce_dummy_image()
+        with self._data_condition:
+            if not self._data_condition.wait(timeout=1.0):
+                raise TimeoutError("timeout receiving frames")
+
+            return self._data_bytes
 
     def _align_fun(self):
         logger.debug("starting _align_fun")
@@ -76,37 +92,18 @@ class VirtualCameraBackend(AbstractCameraBackend):
         logger.debug("starting _camera_fun")
 
         while not current_thread().stopped():
-            backendrequest = None
+            with self._data_condition:
+                self._data_bytes = self._produce_dummy_image()
+                self._data_condition.notify_all()
 
+            time.sleep(1.0 / self._nominal_framerate)
+            self._current_timestampset.camera = time.monotonic_ns()  # need to set as a backend would do so the align functions work fine
+
+            # part of the alignment functions - that is not implemented, but barrier is needed
             try:
-                backendrequest = self._queue_in.get_nowait()
-            except Empty:
-                pass  # no actual job to process...
-
-            if backendrequest:
-                folder = Path("./tmp/")
-                filename = Path(f"img_{datetime.now().astimezone().strftime('%Y%m%d-%H%M%S-%f')}").with_suffix(".jpg")
-                filepath = folder / filename
-                logger.info(f"{filepath=}")
-
-                with open(filepath, "wb") as f:
-                    f.write(self.wait_for_lores_image())
-
-                backenditem = BackendItem(
-                    filepath=filepath,
-                )
-                self._queue_out.put(backenditem)
-                logger.info(f"result item put on output queue: {backenditem}")
-
-                self._queue_in.task_done()
-            else:
-                time.sleep(1.0 / self._nominal_framerate)
-                self._current_timestampset.camera = time.monotonic_ns()
-
-                try:
-                    self._barrier.wait()
-                except BrokenBarrierError:
-                    logger.debug("sync barrier broke")
-                    break
+                self._barrier.wait()
+            except BrokenBarrierError:
+                logger.debug("sync barrier broke")
+                break
 
         logger.info("_camera_fun left")

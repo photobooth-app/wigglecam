@@ -144,6 +144,18 @@ class AbstractCameraBackend(ABC):
         pass
 
     @abstractmethod
+    def wait_for_hires_frame(self):
+        pass
+
+    @abstractmethod
+    def wait_for_hires_image(self, format: str):
+        return self.encode_frame_to_image(self.wait_for_hires_frame(), format)
+
+    @abstractmethod
+    def encode_frame_to_image(self, format: str):
+        pass
+
+    @abstractmethod
     def _camera_fun(self):
         pass
 

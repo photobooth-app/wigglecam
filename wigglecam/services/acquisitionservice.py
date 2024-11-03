@@ -28,7 +28,7 @@ class AcquisitionItem:
     filepath: Path
 
 
-class SyncedAcquisitionService(BaseService):
+class AcquisitionService(BaseService):
     def __init__(self, config: ConfigSyncedAcquisition):
         super().__init__()
 
@@ -95,6 +95,12 @@ class SyncedAcquisitionService(BaseService):
         module = import_module(module_path, package=pkg)
         return getattr(module, class_name)
 
+    def wait_for_hires_frame(self):
+        return self._camera_backend.wait_for_hires_frame()
+
+    def wait_for_hires_image(self, format: str):
+        return self._camera_backend.wait_for_hires_image(format=format)
+
     def gen_stream(self):
         """
         yield jpeg images to stream to client (if not created otherwise)
@@ -124,6 +130,14 @@ class SyncedAcquisitionService(BaseService):
         # TODO: all this should run only on primary device! it's not validated, the connector needs to ensure to call the right device currently.
         # maybe config can be changed in future and so also the _tirgger_out_thread is not started on secondary nodes.
         self._flag_trigger_out.set()
+
+    def wait_for_trigger_in(self, timeout: float = None):
+        # there is only one thread allowed to listen to this event: the jobXservice. Otherwise the event could be missed.
+        val = self._gpio_backend._trigger_in_flag.wait(timeout)
+        if val:
+            # if true, directly clear, because we trigger only once!
+            self._gpio_backend._trigger_in_flag.clear()
+        return val
 
     def _device_start(self, derived_fps: int):
         logger.info("starting device")
@@ -239,6 +253,9 @@ class SyncedAcquisitionService(BaseService):
 
     def _trigger_in_fun(self):
         while not current_thread().stopped():
+            time.sleep(1)
+            continue
+
             if self._gpio_backend._trigger_in_flag.wait(timeout=1.0):
                 self._gpio_backend._trigger_in_flag.clear()  # first clear to avoid endless loops
 

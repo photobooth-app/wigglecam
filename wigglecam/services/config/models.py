@@ -64,11 +64,13 @@ class GroupIoBackend(BaseModel):
 
 
 class ConfigSyncedAcquisition(BaseModel):
-    allow_standalone_job: bool = Field(default=True)
-
     camera_backends: GroupCameraBackend = Field(default=GroupCameraBackend())
     io_backends: GroupIoBackend = Field(default=GroupIoBackend())
 
 
-class ConfigJob(BaseModel):
+class ConfigJobStandalone(BaseModel):
+    enabled: bool = Field(default=True)
+
+
+class ConfigJobConnected(BaseModel):
     pass
