@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 from queue import Queue
-from threading import Barrier, BrokenBarrierError, Condition
+from threading import Barrier, BrokenBarrierError, Condition, Event
 
 from ....utils.stoppablethread import StoppableThread
 
@@ -54,6 +54,7 @@ class AbstractCameraBackend(ABC):
     def __init__(self):
         # declare common abstract props
         self._nominal_framerate: int = None
+        self._started_evt: Event = None
         self._camera_thread: StoppableThread = None
         self._align_thread: StoppableThread = None
         self._barrier: Barrier = None
@@ -61,6 +62,9 @@ class AbstractCameraBackend(ABC):
         self._align_timestampset: TimestampSet = None
         self._queue_in: Queue[BackendRequest] = None
         self._queue_out: Queue[BackendItem] = None
+
+        # init
+        self._started_evt = Event()
 
     def __repr__(self):
         return f"{self.__class__}"
@@ -100,6 +104,7 @@ class AbstractCameraBackend(ABC):
     @abstractmethod
     def stop(self):
         logger.debug(f"{self.__module__} stop called")
+        self._started_evt.clear()
 
         if self._barrier:
             self._barrier.abort()

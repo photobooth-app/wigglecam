@@ -99,6 +99,8 @@ class Picamera2Backend(AbstractCameraBackend):
         logger.info(f"nominal framerate set to {self._nominal_framerate}")
         logger.debug(f"{self.__module__} started")
 
+        self._started_evt.set()
+
     def stop(self):
         super().stop()
 
@@ -192,6 +194,9 @@ class Picamera2Backend(AbstractCameraBackend):
         # capture_time_assigned_timestamp_ns = None
         nominal_frame_duration = 1.0 / self._nominal_framerate
 
+        # wait until all threads are actually started before process anything. mostly relevent for the _fun's defined in abstract
+        self._started_evt.wait(timeout=10)  # we wait very long, it would usually not time out except there is a bug and this unstalls
+
         self.recover()
 
         while not current_thread().stopped():
@@ -237,6 +242,9 @@ class Picamera2Backend(AbstractCameraBackend):
 
     def _camera_fun(self):
         logger.debug("starting _camera_fun")
+
+        # wait until all threads are actually started before process anything. mostly relevent for the _fun's defined in abstract
+        self._started_evt.wait(timeout=10)  # we wait very long, it would usually not time out except there is a bug and this unstalls
 
         while not current_thread().stopped():
             backendrequest = None
