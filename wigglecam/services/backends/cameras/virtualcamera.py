@@ -51,7 +51,7 @@ class VirtualCameraBackend(AbstractCameraBackend):
 
     def encode_frame_to_image(self, frame, format: str) -> bytes:
         # for virtualcamera frame == jpeg data, so no convertion needed.
-        if format in ("jpg", "jpeg"):
+        if format == "jpeg":
             return frame
         else:
             raise NotImplementedError

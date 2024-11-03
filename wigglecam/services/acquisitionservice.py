@@ -143,6 +143,9 @@ class AcquisitionService(BaseService):
             self._flag_trigger_job.clear()
         return val
 
+    def clear_trigger_job_flag(self):
+        self._flag_trigger_job.clear()
+
     def _device_start(self, derived_fps: int):
         logger.info("starting device")
 
@@ -275,7 +278,7 @@ class AcquisitionService(BaseService):
                     filepath = PATH_STANDALONE / filename
 
                     with open(filepath, "wb") as f:
-                        f.write(self.encode_frame_to_image(frame, "jpg"))
+                        f.write(self.encode_frame_to_image(frame, "jpeg"))
 
                     logger.info(f"image saved to {filepath}")
 

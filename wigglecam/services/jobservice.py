@@ -127,6 +127,8 @@ class JobService(BaseService):
         if self._current_job:
             raise ConnectionRefusedError("there is already an unprocessed job! reset first to queue a new job or process it")
 
+        self._acquisition_service.clear_trigger_job_flag()  # reset, otherwise if it was set, the job is processed immediately
+
         self._current_job = JobItem(request=jobrequest)
         self.db_add_jobitem(self._current_job)
 
@@ -172,7 +174,7 @@ class JobService(BaseService):
                 filename = Path(f"img_{frame.captured_time}_{frame.seq:>03}").with_suffix(".jpg")
                 filepath = PATH_ORIGINAL / filename
                 with open(filepath, "wb") as f:
-                    f.write(self._acquisition_service.encode_frame_to_image(frame.frame, "jpg"))
+                    f.write(self._acquisition_service.encode_frame_to_image(frame.frame, "jpeg"))
 
                 self._current_job.filepaths.append(filepath)
                 logger.info(f"image saved to {filepath}")

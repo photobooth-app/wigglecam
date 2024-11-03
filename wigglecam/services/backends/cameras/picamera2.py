@@ -1,23 +1,31 @@
+import dataclasses
+import io
 import logging
 import time
-from datetime import datetime
-from pathlib import Path
-from queue import Empty, Queue
-from threading import BrokenBarrierError, current_thread
+from threading import BrokenBarrierError, Condition, Event, current_thread
 
 from libcamera import Transform, controls
 from picamera2 import Picamera2, Preview
 from picamera2.encoders import MJPEGEncoder, Quality
 from picamera2.outputs import FileOutput
 
-from ....utils.stoppablethread import StoppableThread
 from ...config.models import ConfigBackendPicamera2
-from .abstractbackend import AbstractCameraBackend, BackendItem, BackendRequest, StreamingOutput
+from .abstractbackend import AbstractCameraBackend, StreamingOutput
 
 logger = logging.getLogger(__name__)
 
 
 ADJUST_EVERY_X_CYCLE = 10
+
+
+@dataclasses.dataclass
+class HiresData:
+    # dataframe
+    frame: object = None
+    # signal to producer that requesting thread is ready to be notified
+    request_hires_still: Event = None
+    # condition when frame is avail
+    condition: Condition = None
 
 
 class Picamera2Backend(AbstractCameraBackend):
@@ -29,9 +37,8 @@ class Picamera2Backend(AbstractCameraBackend):
         # private props
         self._picamera2: Picamera2 = None
         self._nominal_framerate: float = None
-        self._processing_thread: StoppableThread = None
-        self._queue_processing: Queue[tuple[BackendRequest, object]] = None
         self._streaming_output: StreamingOutput = None
+        self._hires_data: HiresData = None
 
         logger.info(f"global_camera_info {Picamera2.global_camera_info()}")
 
@@ -41,7 +48,7 @@ class Picamera2Backend(AbstractCameraBackend):
 
         # initialize private props
         self._streaming_output: StreamingOutput = StreamingOutput()
-        self._queue_processing: Queue[tuple[BackendRequest, object]] = Queue()
+        self._hires_data: HiresData = HiresData(frame=None, request_hires_still=Event(), condition=Condition())
 
         # https://github.com/raspberrypi/picamera2/issues/576
         if self._picamera2:
@@ -89,9 +96,6 @@ class Picamera2Backend(AbstractCameraBackend):
 
         self._init_autofocus()
 
-        self._processing_thread = StoppableThread(name="_processing_thread", target=self._processing_fun, args=(), daemon=True)
-        self._processing_thread.start()
-
         logger.info(f"camera_config: {self._picamera2.camera_config}")
         logger.info(f"camera_controls: {self._picamera2.camera_controls}")
         logger.info(f"controls: {self._picamera2.controls}")
@@ -108,17 +112,12 @@ class Picamera2Backend(AbstractCameraBackend):
             self._picamera2.stop()
             self._picamera2.close()  # need to close camera so it can be used by other processes also (or be started again)
 
-        if self._processing_thread and self._processing_thread.is_alive():
-            self._processing_thread.stop()
-            self._processing_thread.join()
-
         logger.debug(f"{self.__module__} stopped")
 
     def camera_alive(self) -> bool:
         super_alive = super().camera_alive()
-        processing_alive = self._processing_thread and self._processing_thread.is_alive()
 
-        return super_alive and processing_alive
+        return super_alive and True
 
     def start_stream(self):
         self._picamera2.stop_recording()
@@ -142,6 +141,34 @@ class Picamera2Backend(AbstractCameraBackend):
                 raise TimeoutError("timeout receiving frames")
 
             return self._streaming_output.frame
+
+    def wait_for_hires_frame(self):
+        with self._hires_data.condition:
+            self._hires_data.request_hires_still.set()
+
+            if not self._hires_data.condition.wait(timeout=2.0):
+                raise TimeoutError("timeout receiving frames")
+
+            self._hires_data.request_hires_still.clear()
+            return self._hires_data.frame
+
+    def wait_for_hires_image(self, format: str) -> bytes:
+        return super().wait_for_hires_image(format=format)
+
+    def encode_frame_to_image(self, frame, format: str) -> bytes:
+        # for picamera2 frame is a  == jpeg data, so no convertion needed.
+        if format == "jpeg":
+            tms = time.time()
+
+            bytes_io = io.BytesIO()
+            image = self._picamera2.helpers.make_image(frame, self._picamera2.camera_config["main"])
+            image.save(bytes_io, format="jpeg", quality=self._config.original_still_quality)
+            logger.info(f"jpg encode finished, time taken: {round((time.time() - tms)*1.0e3, 0)}ms")
+
+            return bytes_io.getbuffer()
+
+        else:
+            raise NotImplementedError
 
     def _check_framerate(self):
         assert self._nominal_framerate is not None
@@ -247,64 +274,34 @@ class Picamera2Backend(AbstractCameraBackend):
         self._started_evt.wait(timeout=10)  # we wait very long, it would usually not time out except there is a bug and this unstalls
 
         while not current_thread().stopped():
-            backendrequest = None
+            if self._hires_data.request_hires_still.is_set():
+                # only capture one pic and return, overlying classes are responsible to ask again if needed fast enough
+                self._hires_data.request_hires_still.clear()
 
-            try:
-                backendrequest = self._queue_in.get_nowait()
-            except Empty:
-                pass  # no actual job to process...
+                # capture hq picture
+                with self._picamera2.captured_request(wait=1.5) as request:
+                    self._hires_data.frame = request.make_buffer("main")
+                    picam_metadata = request.get_metadata()
 
-            if backendrequest:
-                # TODO: check if capable to keep up with the framerate or something get lost? for now we only use 1 frame so it's ok
-                tms = time.time()
-                buffer = self._picamera2.capture_buffer("main", wait=2.0)
-                self._queue_processing.put((backendrequest, buffer))
-                logger.info(f"queued up buffer to process image, time taken: {round((time.time() - tms)*1.0e3, 0)}ms")
+                logger.info("got buffer from cam to send to waiting threads")
+
+                with self._hires_data.condition:
+                    self._hires_data.condition.notify_all()
             else:
+                # capture metadata blocks until new metadata is avail
                 try:
                     picam_metadata = self._picamera2.capture_metadata(wait=2.0)
-                    self._current_timestampset.camera = picam_metadata["SensorTimestamp"]
+
                 except TimeoutError as exc:
                     logger.warning(f"camera timed out: {exc}")
                     break
 
-                try:
-                    self._barrier.wait()
-                except BrokenBarrierError:
-                    logger.debug("sync barrier broke")
-                    break
+            self._current_timestampset.camera = picam_metadata["SensorTimestamp"]
+
+            try:
+                self._barrier.wait()
+            except BrokenBarrierError:
+                logger.debug("sync barrier broke")
+                break
 
         logger.info("_camera_fun left")
-
-    def _processing_fun(self):
-        # TODO: this might be better in multiprocessing or use some lib that is in c++ releasing the gil during processing...
-        logger.debug("starting _processing_fun")
-        buffer_to_proc = None
-
-        while not current_thread().stopped():
-            try:
-                (backendrequest, buffer_to_proc) = self._queue_processing.get(block=True, timeout=1.0)
-                logger.info("got img off queue, jpg proc start")
-            except Empty:
-                continue  # just continue but allow .stopped to exit after 1.0 sec latest...
-
-            # start processing here...
-            folder = Path("./tmp/")
-            filename = Path(f"img_{datetime.now().astimezone().strftime('%Y%m%d-%H%M%S-%f')}")
-            filepath = folder / filename
-            logger.info(f"{filepath=}")
-
-            tms = time.time()
-            image = self._picamera2.helpers.make_image(buffer_to_proc, self._picamera2.camera_config["main"])
-            image.save(filepath.with_suffix(".jpg"), quality=self._config.original_still_quality)
-            logger.info(f"jpg compression finished, time taken: {round((time.time() - tms)*1.0e3, 0)}ms")
-
-            backenditem = BackendItem(
-                filepath=filepath,
-            )
-            self._queue_out.put(backenditem)
-            logger.info(f"result item put on output queue: {backenditem}")
-
-            self._queue_in.task_done()
-
-        logger.info("_processing_fun left")
