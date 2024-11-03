@@ -2,9 +2,26 @@ import io
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from threading import Barrier, BrokenBarrierError, Condition, Event
+from pathlib import Path
+from queue import Queue
+from threading import Barrier, BrokenBarrierError, Condition
+
+from ....utils.stoppablethread import StoppableThread
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class BackendRequest:
+    pass
+    #   nothing to align here until today... maybe here we could add later a skip-frame command or something...
+
+
+@dataclass
+class BackendItem:
+    # request: BackendRequest
+    filepath: Path = None
+    # metadata: dict = None
 
 
 class StreamingOutput(io.BufferedIOBase):
@@ -37,11 +54,13 @@ class AbstractCameraBackend(ABC):
     def __init__(self):
         # declare common abstract props
         self._nominal_framerate: int = None
-        self._capture: Event = None
-        self._capture_in_progress: bool = None
+        self._camera_thread: StoppableThread = None
+        self._align_thread: StoppableThread = None
         self._barrier: Barrier = None
         self._current_timestampset: TimestampSet = None
         self._align_timestampset: TimestampSet = None
+        self._queue_in: Queue[BackendRequest] = None
+        self._queue_out: Queue[BackendItem] = None
 
     def __repr__(self):
         return f"{self.__class__}"
@@ -66,22 +85,36 @@ class AbstractCameraBackend(ABC):
 
         # init common abstract props
         self._nominal_framerate = nominal_framerate
-        self._capture = Event()
-        self._capture_in_progress = False
         self._barrier = Barrier(3, action=self.get_timestamps_to_align)
         self._current_timestampset = TimestampSet(None, None)
         self._align_timestampset = TimestampSet(None, None)
+        self._queue_in: Queue[BackendRequest] = Queue()
+        self._queue_out: Queue[BackendItem] = Queue()
+
+        self._camera_thread = StoppableThread(name="_camera_thread", target=self._camera_fun, args=(), daemon=True)
+        self._camera_thread.start()
+
+        self._align_thread = StoppableThread(name="_align_thread", target=self._align_fun, args=(), daemon=True)
+        self._align_thread.start()
 
     @abstractmethod
     def stop(self):
         logger.debug(f"{self.__module__} stop called")
 
+        if self._align_thread and self._align_thread.is_alive():
+            self._align_thread.stop()
+            self._align_thread.join()
+
+        if self._camera_thread and self._camera_thread.is_alive():
+            self._camera_thread.stop()
+            self._camera_thread.join()
+
     @abstractmethod
     def camera_alive(self) -> bool:
-        pass
+        camera_alive = self._camera_thread and self._camera_thread.is_alive()
+        align_alive = self._align_thread and self._align_thread.is_alive()
 
-    def do_capture(self, filename: str = None, number_frames: int = 1):
-        self._capture.set()
+        return camera_alive and align_alive
 
     def sync_tick(self, timestamp_ns: int):
         self._current_timestampset.reference = timestamp_ns
@@ -100,4 +133,12 @@ class AbstractCameraBackend(ABC):
 
     @abstractmethod
     def wait_for_lores_image(self):
+        pass
+
+    @abstractmethod
+    def _camera_fun(self):
+        pass
+
+    @abstractmethod
+    def _align_fun(self):
         pass

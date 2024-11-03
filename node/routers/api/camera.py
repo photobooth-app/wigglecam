@@ -2,14 +2,21 @@ import logging
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from ...container import container
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
-    prefix="/acquisition",
-    tags=["acquisition"],
+    prefix="/camera",
+    tags=["camera"],
 )
+
+
+class CameraConfig(BaseModel):
+    iso: str | None = None
+    shutter: str | None = None
+    # ... TODO. this shall be an object in acquisition service or camera
 
 
 @router.get("/stream.mjpg")
@@ -31,16 +38,16 @@ def video_stream():
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"preview failed: {exc}") from exc
 
 
-@router.get("/setup")
-def setup_job(job_id, number_captures):
-    container.synced_acquisition_service.setup_job()
+@router.get("/still")
+def still_camera():
+    raise NotImplementedError
 
 
-@router.get("/trigger")
-def trigger_job(job_id):
-    container.synced_acquisition_service.set_trigger_out()
+@router.get("/configure")
+def configure_camera(camera_config: CameraConfig):
+    raise NotImplementedError
 
 
-@router.get("/results")
-def get_results(job_id):
-    pass
+@router.get("/configure/reset")
+def reset_camera_config():
+    raise NotImplementedError

@@ -2,13 +2,15 @@
 
 from fastapi import APIRouter
 
-from . import acquisition, system
+from . import camera, job, system
 
 __all__ = [
-    "acquisition",  # refers to the 'acquisition.py' file
+    "camera",  # refers to the 'acquisition.py' file
+    "job",  # refers to the 'acquisition.py' file
     "system",
 ]
 
 router = APIRouter(prefix="/api")
-router.include_router(acquisition.router)
+router.include_router(camera.router)
+router.include_router(job.router)
 router.include_router(system.router)

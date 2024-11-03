@@ -1,14 +1,13 @@
 import logging
 import time
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass
 from importlib import import_module
 from pathlib import Path
-from queue import Full, Queue
+from queue import Empty, Queue
 from threading import Event, current_thread
 
 from ..utils.stoppablethread import StoppableThread
-from .backends.cameras.abstractbackend import AbstractCameraBackend
+from .backends.cameras.abstractbackend import AbstractCameraBackend, BackendItem, BackendRequest
 from .backends.io.abstractbackend import AbstractIoBackend
 from .baseservice import BaseService
 from .config.models import ConfigSyncedAcquisition
@@ -17,15 +16,16 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class CaptureJob:
-    id: str = field(default_factory=datetime.now)
-    number_captures: int = 1
+class AcqRequest:
+    seq_no: int
+    #   nothing to align here until today...
 
 
 @dataclass
-class CaptureJobResult:
-    id: str = None
-    filenames: list[Path] = field(default_factory=list)
+class AcquisitionItem:
+    # request: AcqRequest
+    # backenditem: BackendItem
+    filepath: Path
 
 
 class SyncedAcquisitionService(BaseService):
@@ -43,14 +43,14 @@ class SyncedAcquisitionService(BaseService):
         self._trigger_in_thread: StoppableThread = None
         self._trigger_out_thread: StoppableThread = None
         self._supervisor_thread: StoppableThread = None
-        self._job: CaptureJob = None
+
         self._flag_trigger_out: Event = None
         self._device_initialized_once: bool = False
-        self._queue_job: Queue = None
 
         # initialize private properties.
         self._flag_trigger_out: Event = Event()
-        self._queue_job: Queue = Queue(maxsize=1)
+        self._queue_in: Queue[AcqRequest] = Queue()
+        self._queue_out: Queue[AcquisitionItem] = Queue()
 
     def start(self):
         super().start()
@@ -120,13 +120,9 @@ class SyncedAcquisitionService(BaseService):
 
             yield (b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + output_jpeg_bytes + b"\r\n\r\n")
 
-    def setup_job(self, job: CaptureJob):
-        try:
-            self._queue_job.put_nowait(job)
-        except Full as exc:
-            raise RuntimeError("there is already an unprocessed job! reset first to queue a new job or process it") from exc
-
-    def set_trigger_out(self):
+    def trigger_execute_job(self):
+        # TODO: all this should run only on primary device! it's not validated, the connector needs to ensure to call the right device currently.
+        # maybe config can be changed in future and so also the _tirgger_out_thread is not started on secondary nodes.
         self._flag_trigger_out.set()
 
     def _device_start(self, derived_fps: int):
@@ -244,25 +240,54 @@ class SyncedAcquisitionService(BaseService):
     def _trigger_in_fun(self):
         while not current_thread().stopped():
             if self._gpio_backend._trigger_in_flag.wait(timeout=1.0):
-                # first clear to avoid endless loops
-                self._gpio_backend._trigger_in_flag.clear()
+                self._gpio_backend._trigger_in_flag.clear()  # first clear to avoid endless loops
 
                 logger.info("trigger_in received to start processing job")
-                # useful if mobile camera is without any interconnection to a concentrator that could setup a job
-                if self._config.allow_standalone_job:
-                    logger.info("using default capture job")
-                    self._job = CaptureJob()
 
-                if self._job:
+                # this is implementation for wigglecam_minimal to allow working without external job setup.
+                if self._queue_in.empty() and self._config.allow_standalone_job:
+                    # useful if mobile camera is without any interconnection to a concentrator that could setup a job
+                    self._queue_in.put(AcqRequest(seq_no=0))
+                    logger.info("default job was added to the input queue")
+
+                # send down to backend the job in input queue
+                # the jobs have just to be in the queue, the backend is taking care about the correct timing -
+                # it might fail if it can not catch up with the framerate
+                while not current_thread().stopped():
                     try:
-                        self._camera_backend.do_capture(self._job.id, self._job.number_captures)
-                    except Exception as exc:
-                        logger.exception(exc)
-                        logger.critical(f"error during capture: {exc}")
-                    finally:
-                        self._job = None
-                else:
-                    logger.warning("capture request ignored because no job set!")
+                        acqrequest = self._queue_in.get_nowait()
+                        logger.info(f"got acquisition request off the queue: {acqrequest}, passing to capture backend.")
+                        backendrequest = BackendRequest()
+                        self._camera_backend._queue_in.put(backendrequest)
+                    except Empty:
+                        logger.info("all capture jobs sent to backend...")
+                        break  # leave inner processing loop, continue listen to trigger in outer.
+
+                # get back the jobs one by one
+                # TODO: maybe we don't need to wait later for join...
+                logger.info("waiting for job to finish")
+                self._camera_backend._queue_in.join()
+                logger.info("ok, continue")
+
+                while not current_thread().stopped():
+                    try:
+                        backenditem: BackendItem = self._camera_backend._queue_out.get_nowait()
+                        acquisitionitem = AcquisitionItem(
+                            filepath=backenditem.filepath,
+                        )
+                        self._queue_out.put(acquisitionitem)
+                    except Empty:
+                        logger.info("all capture jobs received from backend...")
+                        break  # leave inner processing loop, continue listen to trigger in outer.
+                    except TimeoutError:
+                        logger.info("timed out waiting for job to finish :(")
+                        break
+
+                    logger.info("finished queue_acq_input processing")
+                    self._queue_in.task_done()
+
+                logger.info("trigger_in finished, waiting for next job")
+
             else:
                 pass
                 # flag not set, continue

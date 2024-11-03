@@ -2,6 +2,7 @@ import logging
 
 from .services.baseservice import BaseService
 from .services.config import appconfig
+from .services.jobservice import JobService
 from .services.loggingservice import LoggingService
 from .services.sync_acquisition_service import SyncedAcquisitionService
 
@@ -13,6 +14,7 @@ class Container:
     # container
     logging_service = LoggingService(config=appconfig.logging)
     synced_acquisition_service = SyncedAcquisitionService(config=appconfig.syncedacquisition)
+    job_service = JobService(config=appconfig.syncedacquisition, synced_acquisition_service=synced_acquisition_service)
 
     def _service_list(self) -> list[BaseService]:
         # list used to start/stop services. List sorted in the order of definition.

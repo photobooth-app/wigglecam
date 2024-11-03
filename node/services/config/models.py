@@ -68,3 +68,7 @@ class ConfigSyncedAcquisition(BaseModel):
 
     camera_backends: GroupCameraBackend = Field(default=GroupCameraBackend())
     io_backends: GroupIoBackend = Field(default=GroupIoBackend())
+
+
+class ConfigJob(BaseModel):
+    pass

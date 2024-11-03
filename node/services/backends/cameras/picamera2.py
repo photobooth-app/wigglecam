@@ -12,7 +12,7 @@ from picamera2.outputs import FileOutput
 
 from ....utils.stoppablethread import StoppableThread
 from ...config.models import ConfigBackendPicamera2
-from .abstractbackend import AbstractCameraBackend, StreamingOutput
+from .abstractbackend import AbstractCameraBackend, BackendItem, BackendRequest, StreamingOutput
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +29,9 @@ class Picamera2Backend(AbstractCameraBackend):
         # private props
         self._picamera2: Picamera2 = None
         self._nominal_framerate: float = None
-        self._camera_thread: StoppableThread = None
         self._processing_thread: StoppableThread = None
-        self._queue_processing: Queue = None
+        self._queue_processing: Queue[tuple[BackendRequest, object]] = None
         self._streaming_output: StreamingOutput = None
-        self._align_thread: StoppableThread = None
-        self._camera_timestamp_ns: int = None
 
         logger.info(f"global_camera_info {Picamera2.global_camera_info()}")
 
@@ -44,8 +41,7 @@ class Picamera2Backend(AbstractCameraBackend):
 
         # initialize private props
         self._streaming_output: StreamingOutput = StreamingOutput()
-        self._queue_processing: Queue = Queue()
-        self._camera_timestamp_ns: int = None
+        self._queue_processing: Queue[tuple[BackendRequest, object]] = Queue()
 
         # https://github.com/raspberrypi/picamera2/issues/576
         if self._picamera2:
@@ -96,12 +92,6 @@ class Picamera2Backend(AbstractCameraBackend):
         self._processing_thread = StoppableThread(name="_processing_thread", target=self._processing_fun, args=(), daemon=True)
         self._processing_thread.start()
 
-        self._camera_thread = StoppableThread(name="_camera_thread", target=self._camera_fun, args=(), daemon=True)
-        self._camera_thread.start()
-
-        self._align_thread = StoppableThread(name="_align_thread", target=self._align_fun, args=(), daemon=True)
-        self._align_thread.start()
-
         logger.info(f"camera_config: {self._picamera2.camera_config}")
         logger.info(f"camera_controls: {self._picamera2.camera_controls}")
         logger.info(f"controls: {self._picamera2.controls}")
@@ -119,26 +109,17 @@ class Picamera2Backend(AbstractCameraBackend):
             self._picamera2.stop()
             self._picamera2.close()  # need to close camera so it can be used by other processes also (or be started again)
 
-        if self._camera_thread and self._camera_thread.is_alive():
-            self._camera_thread.stop()
-            self._camera_thread.join()
-
         if self._processing_thread and self._processing_thread.is_alive():
             self._processing_thread.stop()
             self._processing_thread.join()
 
-        if self._align_thread and self._align_thread.is_alive():
-            self._align_thread.stop()
-            self._align_thread.join()
-
         logger.debug(f"{self.__module__} stopped")
 
     def camera_alive(self) -> bool:
-        camera_alive = self._camera_thread and self._camera_thread.is_alive()
+        super_alive = super().camera_alive()
         processing_alive = self._processing_thread and self._processing_thread.is_alive()
-        align_alive = self._align_thread and self._align_thread.is_alive()
 
-        return camera_alive and processing_alive and align_alive
+        return super_alive and processing_alive
 
     def start_stream(self):
         self._picamera2.stop_recording()
@@ -197,10 +178,6 @@ class Picamera2Backend(AbstractCameraBackend):
 
         logger.debug("autofocus set")
 
-    @staticmethod
-    def clamp(n, min_value, max_value):
-        return max(min_value, min(n, max_value))
-
     def recover(self):
         tms = time.time()
         try:
@@ -221,8 +198,8 @@ class Picamera2Backend(AbstractCameraBackend):
         self.recover()
 
         while not current_thread().stopped():
-            if self._capture_in_progress:
-                adjust_cycle_counter = 0  # keep counter 0 until something is in progress and wait X_CYCLES until adjustment is done afterwards
+            # if self._capture_in_progress:
+            #     adjust_cycle_counter = 0  # keep counter 0 until something is in progress and wait X_CYCLES until adjustment is done afterwards
 
             try:
                 self._barrier.wait()
@@ -232,13 +209,6 @@ class Picamera2Backend(AbstractCameraBackend):
                 break
 
             timestamp_delta_ns = self._align_timestampset.camera - self._align_timestampset.reference  # in ns
-
-            # if abs(timestamp_delta_ns) > (1.1e9 * nominal_frame_duration):
-            #     logger.info("delta big, recovering...")
-            #     adjust_cycle_counter = 0
-            #     self.recover()
-            #     logger.info("finished recover")
-            #     continue
 
             if adjust_cycle_counter >= ADJUST_EVERY_X_CYCLE:
                 adjust_cycle_counter = 0
@@ -272,15 +242,19 @@ class Picamera2Backend(AbstractCameraBackend):
         logger.debug("starting _camera_fun")
 
         while not current_thread().stopped():
-            if self._capture.is_set():
-                self._capture.clear()
-                self._capture_in_progress = True
+            backendrequest = None
 
+            try:
+                backendrequest = self._queue_in.get_nowait()
+            except Empty:
+                pass  # no actual job to process...
+
+            if backendrequest:
+                # TODO: check if capable to keep up with the framerate or something get lost? for now we only use 1 frame so it's ok
                 tms = time.time()
-                self._queue_processing.put(self._picamera2.capture_buffer("main", wait=2.0))
+                buffer = self._picamera2.capture_buffer("main", wait=2.0)
+                self._queue_processing.put((backendrequest, buffer))
                 logger.info(f"queued up buffer to process image, time taken: {round((time.time() - tms)*1.0e3, 0)}ms")
-                self._capture_in_progress = False
-
             else:
                 try:
                     picam_metadata = self._picamera2.capture_metadata(wait=2.0)
@@ -298,12 +272,13 @@ class Picamera2Backend(AbstractCameraBackend):
         logger.info("_camera_fun left")
 
     def _processing_fun(self):
+        # TODO: this might be better in multiprocessing or use some lib that is in c++ releasing the gil during processing...
         logger.debug("starting _processing_fun")
         buffer_to_proc = None
 
         while not current_thread().stopped():
             try:
-                buffer_to_proc = self._queue_processing.get(block=True, timeout=1.0)
+                (backendrequest, buffer_to_proc) = self._queue_processing.get(block=True, timeout=1.0)
                 logger.info("got img off queue, jpg proc start")
             except Empty:
                 continue  # just continue but allow .stopped to exit after 1.0 sec latest...
@@ -318,5 +293,13 @@ class Picamera2Backend(AbstractCameraBackend):
             image = self._picamera2.helpers.make_image(buffer_to_proc, self._picamera2.camera_config["main"])
             image.save(filepath.with_suffix(".jpg"), quality=self._config.original_still_quality)
             logger.info(f"jpg compression finished, time taken: {round((time.time() - tms)*1.0e3, 0)}ms")
+
+            backenditem = BackendItem(
+                filepath=filepath,
+            )
+            self._queue_out.put(backenditem)
+            logger.info(f"result item put on output queue: {backenditem}")
+
+            self._queue_in.task_done()
 
         logger.info("_processing_fun left")

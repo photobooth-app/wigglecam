@@ -46,7 +46,7 @@ def main(args=None, run: bool = True):
     container.start()
 
     _shutterbutton_in = Button(pin=shutter_pin, bounce_time=0.04)
-    _shutterbutton_in.when_pressed = container.synced_acquisition_service.set_trigger_out
+    _shutterbutton_in.when_pressed = container.synced_acquisition_service.trigger_execute_job
     logger.info(f"external trigger button on {_shutterbutton_in}")
 
     try:
