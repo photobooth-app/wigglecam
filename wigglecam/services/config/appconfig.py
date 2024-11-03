@@ -3,7 +3,7 @@ from datetime import datetime
 from pydantic import PrivateAttr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .models import ConfigJobConnected, ConfigJobStandalone, ConfigLogging, ConfigSyncedAcquisition
+from .models import ConfigJobConnected, ConfigLogging, ConfigSyncedAcquisition
 
 
 class AppConfig(BaseSettings):
@@ -26,7 +26,6 @@ class AppConfig(BaseSettings):
     logging: ConfigLogging = ConfigLogging()
     syncedacquisition: ConfigSyncedAcquisition = ConfigSyncedAcquisition()
     jobconnected: ConfigJobConnected = ConfigJobConnected()
-    jobstandalone: ConfigJobStandalone = ConfigJobStandalone()
 
     model_config = SettingsConfigDict(
         env_file_encoding="utf-8",

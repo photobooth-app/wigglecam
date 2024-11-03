@@ -46,17 +46,17 @@ class VirtualCameraBackend(AbstractCameraBackend):
     def wait_for_hires_frame(self):
         return self.wait_for_lores_image()
 
-    def wait_for_hires_image(self, *args, **kwargs):
-        return super().wait_for_hires_image(*args, **kwargs)
+    def wait_for_hires_image(self, format: str):
+        return super().wait_for_hires_image(format=format)
 
-    def encode_frame_to_image(self, frame, format: str):
+    def encode_frame_to_image(self, frame, format: str) -> bytes:
         # for virtualcamera frame == jpeg data, so no convertion needed.
         if format in ("jpg", "jpeg"):
             return frame
         else:
             raise NotImplementedError
 
-    def _produce_dummy_image(self):
+    def _produce_dummy_image(self) -> bytes:
         byte_io = io.BytesIO()
         imarray = numpy.random.rand(250, 250, 3) * 255
         random_image = Image.fromarray(imarray.astype("uint8"), "RGB")
@@ -64,7 +64,7 @@ class VirtualCameraBackend(AbstractCameraBackend):
 
         return byte_io.getbuffer()
 
-    def wait_for_lores_image(self):
+    def wait_for_lores_image(self) -> bytes:
         """for other threads to receive a lores JPEG image"""
 
         with self._data_condition:

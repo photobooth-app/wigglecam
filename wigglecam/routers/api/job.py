@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, HTTPException, status
 
 from ...container import container
-from ...services.jobconnectedservice import JobItem, JobRequest
+from ...services.jobservice import JobItem, JobRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter(

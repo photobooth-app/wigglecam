@@ -1,13 +1,13 @@
 import logging
+import os
 import time
-from dataclasses import dataclass
+from datetime import datetime
 from importlib import import_module
 from pathlib import Path
-from queue import Empty, Queue
 from threading import Event, current_thread
 
 from ..utils.stoppablethread import StoppableThread
-from .backends.cameras.abstractbackend import AbstractCameraBackend, BackendItem, BackendRequest
+from .backends.cameras.abstractbackend import AbstractCameraBackend
 from .backends.io.abstractbackend import AbstractIoBackend
 from .baseservice import BaseService
 from .config.models import ConfigSyncedAcquisition
@@ -15,17 +15,12 @@ from .config.models import ConfigSyncedAcquisition
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class AcqRequest:
-    seq_no: int
-    #   nothing to align here until today...
+DATA_PATH = Path("./media")
+# as from image source
+PATH_STANDALONE = DATA_PATH / "standalone"
 
-
-@dataclass
-class AcquisitionItem:
-    # request: AcqRequest
-    # backenditem: BackendItem
-    filepath: Path
+print(DATA_PATH)
+print(PATH_STANDALONE)
 
 
 class AcquisitionService(BaseService):
@@ -44,13 +39,16 @@ class AcquisitionService(BaseService):
         self._trigger_out_thread: StoppableThread = None
         self._supervisor_thread: StoppableThread = None
 
+        self._flag_trigger_job: Event = None
         self._flag_trigger_out: Event = None
         self._device_initialized_once: bool = False
 
         # initialize private properties.
+        self._flag_trigger_job: Event = Event()
         self._flag_trigger_out: Event = Event()
-        self._queue_in: Queue[AcqRequest] = Queue()
-        self._queue_out: Queue[AcquisitionItem] = Queue()
+
+        # ensure data directories exist
+        os.makedirs(f"{PATH_STANDALONE}", exist_ok=True)
 
     def start(self):
         super().start()
@@ -101,6 +99,9 @@ class AcquisitionService(BaseService):
     def wait_for_hires_image(self, format: str):
         return self._camera_backend.wait_for_hires_image(format=format)
 
+    def encode_frame_to_image(self, frame, format: str):
+        return self._camera_backend.encode_frame_to_image(frame, format)
+
     def gen_stream(self):
         """
         yield jpeg images to stream to client (if not created otherwise)
@@ -131,12 +132,15 @@ class AcquisitionService(BaseService):
         # maybe config can be changed in future and so also the _tirgger_out_thread is not started on secondary nodes.
         self._flag_trigger_out.set()
 
-    def wait_for_trigger_in(self, timeout: float = None):
+    def wait_for_trigger_job(self, timeout: float = None):
+        # maybe in future replace by this? lets see... https://superfastpython.com/thread-race-condition-timing/
         # there is only one thread allowed to listen to this event: the jobXservice. Otherwise the event could be missed.
-        val = self._gpio_backend._trigger_in_flag.wait(timeout)
+        # standalone mode could process it also, so need to clarify in
+        # TODO: check how to allow two listening threads.
+        val = self._flag_trigger_job.wait(timeout)
         if val:
             # if true, directly clear, because we trigger only once!
-            self._gpio_backend._trigger_in_flag.clear()
+            self._flag_trigger_job.clear()
         return val
 
     def _device_start(self, derived_fps: int):
@@ -252,61 +256,28 @@ class AcquisitionService(BaseService):
         logger.info("left _sync_fun")  # if left, it allows supervisor to restart if needed.
 
     def _trigger_in_fun(self):
+        logger.info("_trigger_in_fun started")
         while not current_thread().stopped():
-            time.sleep(1)
-            continue
-
             if self._gpio_backend._trigger_in_flag.wait(timeout=1.0):
-                self._gpio_backend._trigger_in_flag.clear()  # first clear to avoid endless loops
+                # if true, directly clear, because we trigger only once!
+                self._gpio_backend._trigger_in_flag.clear()
+                # maybe in future replace by this? lets see... https://superfastpython.com/thread-race-condition-timing/
 
-                logger.info("trigger_in received to start processing job")
+                # job is triggered by this flag.
+                self._flag_trigger_job.set()
 
-                # this is implementation for wigglecam_minimal to allow working without external job setup.
-                if self._queue_in.empty() and self._config.allow_standalone_job:
-                    # useful if mobile camera is without any interconnection to a concentrator that could setup a job
-                    self._queue_in.put(AcqRequest(seq_no=0))
-                    logger.info("default job was added to the input queue")
+                if self._config.standalone_mode:
+                    # recommended to disable in production.
+                    logger.info("standalone mode is enabled! to use the job processor and connectivity, disable standalone mode in config!")
+                    frame = self.wait_for_hires_frame()
 
-                # send down to backend the job in input queue
-                # the jobs have just to be in the queue, the backend is taking care about the correct timing -
-                # it might fail if it can not catch up with the framerate
-                while not current_thread().stopped():
-                    try:
-                        acqrequest = self._queue_in.get_nowait()
-                        logger.info(f"got acquisition request off the queue: {acqrequest}, passing to capture backend.")
-                        backendrequest = BackendRequest()
-                        self._camera_backend._queue_in.put(backendrequest)
-                    except Empty:
-                        logger.info("all capture jobs sent to backend...")
-                        break  # leave inner processing loop, continue listen to trigger in outer.
+                    filename = Path(f"img_{datetime.now().astimezone().strftime('%Y%m%d-%H%M%S-%f')}").with_suffix(".jpg")
+                    filepath = PATH_STANDALONE / filename
 
-                # get back the jobs one by one
-                # TODO: maybe we don't need to wait later for join...
-                logger.info("waiting for job to finish")
-                self._camera_backend._queue_in.join()
-                logger.info("ok, continue")
+                    with open(filepath, "wb") as f:
+                        f.write(self.encode_frame_to_image(frame, "jpg"))
 
-                while not current_thread().stopped():
-                    try:
-                        backenditem: BackendItem = self._camera_backend._queue_out.get_nowait()
-                        acquisitionitem = AcquisitionItem(
-                            filepath=backenditem.filepath,
-                        )
-                        self._queue_out.put(acquisitionitem)
-                        logger.info(f"put {acquisitionitem} on queue output")
-                        self._queue_in.task_done()
-                    except Empty:
-                        logger.info("all capture jobs received from backend...")
-                        break  # leave inner processing loop, continue listen to trigger in outer.
-                    except TimeoutError:
-                        logger.info("timed out waiting for job to finish :(")
-                        break
-
-                logger.info("trigger_in finished, waiting for next job")
-
-            else:
-                pass
-                # flag not set, continue
+                    logger.info(f"image saved to {filepath}")
 
         logger.info("left _trigger_in_fun")  # if left, it allows supervisor to restart if needed.
 

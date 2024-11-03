@@ -4,8 +4,7 @@ import os
 from .services.acquisitionservice import AcquisitionService
 from .services.baseservice import BaseService
 from .services.config import appconfig
-from .services.jobconnectedservice import JobConnectedService
-from .services.jobstandaloneservice import JobStandaloneService
+from .services.jobservice import JobService
 from .services.loggingservice import LoggingService
 
 logger = logging.getLogger(__name__)
@@ -22,8 +21,7 @@ class Container:
     # container
     logging_service = LoggingService(config=appconfig.logging)
     synced_acquisition_service = AcquisitionService(config=appconfig.syncedacquisition)
-    jobconnectedservice = JobConnectedService(config=appconfig.jobconnected, acquisition_service=synced_acquisition_service)
-    jobstandaloneservice = JobStandaloneService(config=appconfig.jobstandalone, acquisition_service=synced_acquisition_service)
+    jobconnectedservice = JobService(config=appconfig.jobconnected, acquisition_service=synced_acquisition_service)
 
     def __init__(self):
         # ensure dirs are avail

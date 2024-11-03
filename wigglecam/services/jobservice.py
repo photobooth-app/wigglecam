@@ -1,13 +1,13 @@
 import logging
 import os
 import uuid
+from collections import namedtuple
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
-from queue import Empty
-from threading import current_thread
 
 from ..utils.stoppablethread import StoppableThread
-from .acquisitionservice import AcqRequest, AcquisitionService
+from .acquisitionservice import AcquisitionService
 from .baseservice import BaseService
 from .config.models import ConfigJobConnected
 
@@ -51,7 +51,7 @@ class JobItem:
         return out
 
 
-class JobConnectedService(BaseService):
+class JobService(BaseService):
     def __init__(self, config: ConfigJobConnected, acquisition_service: AcquisitionService):
         super().__init__()
 
@@ -69,9 +69,6 @@ class JobConnectedService(BaseService):
 
     def start(self):
         super().start()
-
-        self._jobprocessor_thread = StoppableThread(name="_jobprocessor_thread", target=self._jobprocessor_fun, args=(), daemon=True)
-        self._jobprocessor_thread.start()
 
         logger.debug(f"{self.__module__} started")
 
@@ -128,16 +125,13 @@ class JobConnectedService(BaseService):
 
     def setup_job_request(self, jobrequest: JobRequest) -> JobItem:
         if self._current_job:
-            # if self._synced_acquisition_service._queue_in.qsize() > 0:
             raise ConnectionRefusedError("there is already an unprocessed job! reset first to queue a new job or process it")
 
         self._current_job = JobItem(request=jobrequest)
         self.db_add_jobitem(self._current_job)
-        # try to put job to queue for processing.
-        # add job to db and also put it into the queue to process
-        for i in range(self._current_job.request.number_captures):
-            acqrequest = AcqRequest(seq_no=i)
-            self._acquisition_service._queue_in.put(acqrequest)
+
+        self._jobprocessor_thread = StoppableThread(name="_jobprocessor_thread", target=self._jobprocessor_fun, args=(), daemon=True)
+        self._jobprocessor_thread.start()
 
         return self._current_job
 
@@ -147,25 +141,48 @@ class JobConnectedService(BaseService):
         self._acquisition_service.trigger_execute_job()
 
     def _jobprocessor_fun(self):
-        logger.info("_jobprocessor_fun started")
+        Captures = namedtuple("Captures", ["seq", "captured_time", "frame"])
+        logger.info("_jobprocessor_fun started, waiting 10 seconds for trigger, otherwise need to setup job again.")
 
-        while not current_thread().stopped():
-            self._acquisition_service._queue_in.join()
+        if self._acquisition_service.wait_for_trigger_job(timeout=10):
+            if not self._current_job:
+                raise RuntimeError("you have to setup the job first!")
 
-            try:
-                # active waiting!
-                acqitem = self._acquisition_service._queue_out.get(block=True, timeout=1)
-                if not self._current_job:
-                    # job ran just by trigger on standalone basis. # will be removed later once app is separated properly.
-                    continue
-                self._current_job.filepaths.append(acqitem.filepath)
-            except Empty:
-                continue
+            # warning: use jobservice only without standalone mode! this and the other thread would try to get the event at the same time.
+
+            # step 1:
+            # gather number of requested frames
+            frames: list[Captures] = []
+            for i in range(self._current_job.request.number_captures):
+                frames.append(
+                    Captures(
+                        i,
+                        datetime.now().astimezone().strftime("%Y%m%d-%H%M%S-%f"),
+                        self._acquisition_service.wait_for_hires_frame(),
+                    )
+                )
+                logger.info(f"got {i+1}/{self._current_job.request.number_captures} frames")
+
+            assert len(frames) == self._current_job.request.number_captures
+
+            # step 2:
+            # convert to jpg once got all, maybe this can be done in a multiporcessing worker via
+            # tx/rx queue to speed up process and reduce memory consumption due to keeping all images in an array
+            for frame in frames:
+                filename = Path(f"img_{frame.captured_time}_{frame.seq:>03}").with_suffix(".jpg")
+                filepath = PATH_ORIGINAL / filename
+                with open(filepath, "wb") as f:
+                    f.write(self._acquisition_service.encode_frame_to_image(frame.frame, "jpg"))
+
+                self._current_job.filepaths.append(filepath)
+                logger.info(f"image saved to {filepath}")
 
             # update jobitem:
             logger.info(self._current_job)
             self.db_update_jobitem(self._current_job)
+        else:
+            logger.warning("trigger not received within 10 seconds, resetting job setup.")
 
-            self._current_job = None
+        self._current_job = None
 
         logger.info("_jobprocessor_fun left")

@@ -140,7 +140,7 @@ class AbstractCameraBackend(ABC):
         pass
 
     @abstractmethod
-    def wait_for_lores_image(self):
+    def wait_for_lores_image(self) -> bytes:
         pass
 
     @abstractmethod
@@ -148,11 +148,11 @@ class AbstractCameraBackend(ABC):
         pass
 
     @abstractmethod
-    def wait_for_hires_image(self, format: str):
+    def wait_for_hires_image(self, format: str) -> bytes:
         return self.encode_frame_to_image(self.wait_for_hires_frame(), format)
 
     @abstractmethod
-    def encode_frame_to_image(self, format: str):
+    def encode_frame_to_image(self, frame, format: str) -> bytes:
         pass
 
     @abstractmethod
