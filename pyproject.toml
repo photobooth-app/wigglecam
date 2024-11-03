@@ -43,6 +43,10 @@ dependencies = [
     "opencv-python-headless",
 ]
 
+[project.optional-dependencies]
+gui = [
+    "pyside6>=6.8.0.2",
+]
 
 [project.urls]
 homepage = "https://github.com/mgineer85/photobooth-wigglecam"
@@ -51,6 +55,7 @@ documentation = "https://github.com/mgineer85/photobooth-wigglecam"
 
 [project.scripts]
 wigglecam-mobile = "examples.lowlevel.gpio:main"
+wigglecam-gui = "examples.gui.camera:main"
 wigglecam-node = "wigglecam.__main__:main"
 
 [tool.pdm]
