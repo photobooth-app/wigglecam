@@ -19,9 +19,6 @@ DATA_PATH = Path("./media")
 # as from image source
 PATH_STANDALONE = DATA_PATH / "standalone"
 
-print(DATA_PATH)
-print(PATH_STANDALONE)
-
 
 class AcquisitionService(BaseService):
     def __init__(self, config: ConfigSyncedAcquisition):
