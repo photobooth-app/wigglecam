@@ -184,7 +184,7 @@ class JobService(BaseService):
                     self.setup_job_request(JobRequest(number_captures=1))
                     logger.info("trigger received but no job was set up. standalone_mode is enabled, so using default job setup")
                 else:
-                    raise RuntimeError("you have to setup the job first or enable standalone_mode!")
+                    logger.error("you have to setup the job first or enable standalone_mode!")
 
                 try:
                     self._proc_job()
