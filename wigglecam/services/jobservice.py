@@ -168,8 +168,9 @@ class JobService(BaseService):
             assert len(frames) == self._current_job.request.number_captures
 
             # step 2:
-            # convert to jpg once got all, maybe this can be done in a multiporcessing worker via
+            # convert to jpg once got all, maybe this can be done in a separate thread worker via
             # tx/rx queue to speed up process and reduce memory consumption due to keeping all images in an array
+            # see benchmarks to check which method to implement later...
             for frame in frames:
                 filename = Path(f"img_{frame.captured_time}_{frame.seq:>03}").with_suffix(".jpg")
                 filepath = PATH_ORIGINAL / filename
