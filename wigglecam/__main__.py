@@ -1,6 +1,8 @@
 """Application module."""
 
+import argparse
 import logging
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -14,6 +16,10 @@ from .__version__ import __version__
 from .container import container
 from .routers import api
 from .routers.static import static_router
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--host", action="store", type=str, default="0.0.0.0", help="Host the server is bound to (default: %(default)s).")
+parser.add_argument("--port", action="store", type=int, default=8000, help="Port the server listens to (default: %(default)s).")
 
 logger = logging.getLogger(f"{__name__}")
 
@@ -65,14 +71,19 @@ def _create_app() -> FastAPI:
 app = _create_app()
 
 
-def main(run_server: bool = True):
+def main(args=None, run: bool = True):
+    args = parser.parse_args(args)  # parse here, not above because pytest system exit 2
+
+    host = args.host
+    port = args.port
+
     # main function to allow api is runnable via project.scripts shortcut
     # ref: https://stackoverflow.com/a/70393344
     server = uvicorn.Server(
         uvicorn.Config(
             app,
-            host="0.0.0.0",
-            port=8000,
+            host=host,
+            port=port,
             reload=False,
             log_level="debug",
         )
@@ -90,9 +101,9 @@ def main(run_server: bool = True):
     server.force_exit = True  # leads to many exceptions on shutdown, but ... it is what it is...
 
     # run
-    if run_server:  # for pytest
+    if run:  # for pytest
         server.run()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main(args=sys.argv[1:]))  # for testing

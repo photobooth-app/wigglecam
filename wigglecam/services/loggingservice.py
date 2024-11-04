@@ -40,8 +40,6 @@ class LoggingService(BaseService):
         # earlier by some .warn .info or other
         # force=False because otherwise the pytest console logger stream handler gets deleted
         logging.basicConfig(level=logging.DEBUG, format=fmt, force=False, encoding="utf-8")
-        logging.debug("loggingservice __init__ basicConfig set")
-        logging.debug("loggingservice __init__ started")
 
         ## logger
         # default logger (root = None or "")
@@ -67,9 +65,6 @@ class LoggingService(BaseService):
         sys.excepthook = self._handle_sys_exception
         threading.excepthook = self._handle_threading_exception
         # no solution to handle exceptions in sep processes yet...
-
-        logging.debug("loggingservice __init__ finished")
-        logging.debug(f"registered handlers: {logging.root.handlers}")
 
         self.remove_old_logs()
 
