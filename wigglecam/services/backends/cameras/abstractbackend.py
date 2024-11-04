@@ -2,26 +2,11 @@ import io
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from pathlib import Path
-from queue import Queue
 from threading import Barrier, BrokenBarrierError, Condition, Event
 
 from ....utils.stoppablethread import StoppableThread
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class BackendRequest:
-    pass
-    #   nothing to align here until today... maybe here we could add later a skip-frame command or something...
-
-
-@dataclass
-class BackendItem:
-    # request: BackendRequest
-    filepath: Path = None
-    # metadata: dict = None
 
 
 class StreamingOutput(io.BufferedIOBase):
@@ -60,8 +45,6 @@ class AbstractCameraBackend(ABC):
         self._barrier: Barrier = None
         self._current_timestampset: TimestampSet = None
         self._align_timestampset: TimestampSet = None
-        self._queue_in: Queue[BackendRequest] = None
-        self._queue_out: Queue[BackendItem] = None
 
         # init
         self._started_evt = Event()
@@ -92,8 +75,6 @@ class AbstractCameraBackend(ABC):
         self._barrier = Barrier(3, action=self.get_timestamps_to_align)
         self._current_timestampset = TimestampSet(None, None)
         self._align_timestampset = TimestampSet(None, None)
-        self._queue_in: Queue[BackendRequest] = Queue()
-        self._queue_out: Queue[BackendItem] = Queue()
 
         self._camera_thread = StoppableThread(name="_camera_thread", target=self._camera_fun, args=(), daemon=True)
         self._camera_thread.start()
