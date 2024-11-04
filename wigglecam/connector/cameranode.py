@@ -4,15 +4,15 @@ import requests
 
 from wigglecam.services.jobservice import JobRequest
 
-from .models import ConfigNode
+from .models import ConfigCameraNode
 
 logger = logging.getLogger(__name__)
 
 
-class Node:
-    def __init__(self, config: ConfigNode = None):
+class CameraNode:
+    def __init__(self, config: ConfigCameraNode = None):
         # init the arguments
-        self._config: ConfigNode = config
+        self._config: ConfigCameraNode = config
 
         # define private props
         pass

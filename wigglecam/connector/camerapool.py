@@ -2,18 +2,18 @@ import logging
 
 from wigglecam.services.jobservice import JobRequest
 
-from .node import Node
+from .cameranode import CameraNode
 
 logger = logging.getLogger(__name__)
 
 
-class Pool:
-    def __init__(self, nodes: list[Node]):
+class CameraPool:
+    def __init__(self, nodes: list[CameraNode]):
         # init the arguments
-        self._nodes: list[Node] = nodes
+        self._nodes: list[CameraNode] = nodes
 
         # define private props
-        self._primary_node: Node = None
+        self._primary_node: CameraNode = None
         pass
 
         self._post_init()
