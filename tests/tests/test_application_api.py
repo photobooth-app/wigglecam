@@ -16,4 +16,4 @@ def test_app():
 def test_main_instance():
     import wigglecam.__main__
 
-    wigglecam.__main__.main(False)
+    wigglecam.__main__.main([], False)

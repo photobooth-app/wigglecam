@@ -119,5 +119,5 @@ build-backend = "pdm.backend"
 
 
 [tool.pdm.build]
-includes = ["./wigglecam","./examples"]
+includes = ["./wigglecam","./examples","./connector/"]
 
