@@ -160,7 +160,7 @@ class GpioBackend(AbstractIoBackend):
                 except Empty:
                     pass
                 else:
-                    request.set_value(_gpiod_trigger_out, value)
+                    request.set_value(_gpiod_trigger_out, Value.ACTIVE if value else Value.INACTIVE)
 
         logger.debug("_gpio_triggerout_fun left")
 
