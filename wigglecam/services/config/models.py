@@ -64,11 +64,9 @@ class GroupIoBackend(BaseModel):
 
 
 class ConfigSyncedAcquisition(BaseModel):
-    standalone_mode: bool = Field(default=True)
-
     camera_backends: GroupCameraBackend = Field(default=GroupCameraBackend())
     io_backends: GroupIoBackend = Field(default=GroupIoBackend())
 
 
 class ConfigJobConnected(BaseModel):
-    pass
+    standalone_mode: bool = Field(default=True)

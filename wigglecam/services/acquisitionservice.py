@@ -1,9 +1,6 @@
 import logging
-import os
 import time
-from datetime import datetime
 from importlib import import_module
-from pathlib import Path
 from threading import Event, current_thread
 
 from ..utils.stoppablethread import StoppableThread
@@ -13,11 +10,6 @@ from .baseservice import BaseService
 from .config.models import ConfigSyncedAcquisition
 
 logger = logging.getLogger(__name__)
-
-
-DATA_PATH = Path("./media")
-# as from image source
-PATH_STANDALONE = DATA_PATH / "standalone"
 
 
 class AcquisitionService(BaseService):
@@ -32,20 +24,14 @@ class AcquisitionService(BaseService):
         self._camera_backend: AbstractCameraBackend = None
         self._gpio_backend: AbstractIoBackend = None
         self._sync_thread: StoppableThread = None
-        self._trigger_in_thread: StoppableThread = None
         self._trigger_out_thread: StoppableThread = None
         self._supervisor_thread: StoppableThread = None
 
-        self._flag_trigger_job: Event = None
         self._flag_trigger_out: Event = None
         self._device_initialized_once: bool = False
 
         # initialize private properties.
-        self._flag_trigger_job: Event = Event()
         self._flag_trigger_out: Event = Event()
-
-        # ensure data directories exist
-        os.makedirs(f"{PATH_STANDALONE}", exist_ok=True)
 
     def start(self):
         super().start()
@@ -133,18 +119,14 @@ class AcquisitionService(BaseService):
         self._flag_trigger_out.set()
 
     def wait_for_trigger_job(self, timeout: float = None):
-        # maybe in future replace by this? lets see... https://superfastpython.com/thread-race-condition-timing/
-        # there is only one thread allowed to listen to this event: the jobXservice. Otherwise the event could be missed.
-        # standalone mode could process it also, so need to clarify in
-        # TODO: check how to allow two listening threads.
-        val = self._flag_trigger_job.wait(timeout)
+        val = self._gpio_backend._trigger_in_flag.wait(timeout)
         if val:
             # if true, directly clear, because we trigger only once!
-            self._flag_trigger_job.clear()
+            self._gpio_backend._trigger_in_flag.clear()
         return val
 
     def clear_trigger_job_flag(self):
-        self._flag_trigger_job.clear()
+        self._gpio_backend._trigger_in_flag.clear()
 
     def _device_start(self, derived_fps: int):
         logger.info("starting device")
@@ -160,9 +142,6 @@ class AcquisitionService(BaseService):
         # sync clock and camera thread
         self._sync_thread = StoppableThread(name="_sync_thread", target=self._sync_fun, args=(), daemon=True)
         self._sync_thread.start()
-        # capture thread
-        self._trigger_in_thread = StoppableThread(name="_trigger_in_thread", target=self._trigger_in_fun, args=(), daemon=True)
-        self._trigger_in_thread.start()
         # forward trigger to other devices thread
         self._trigger_out_thread = StoppableThread(name="_trigger_out_thread", target=self._trigger_out_fun, args=(), daemon=True)
         self._trigger_out_thread.start()
@@ -176,10 +155,6 @@ class AcquisitionService(BaseService):
             self._trigger_out_thread.stop()
             self._trigger_out_thread.join()
 
-        if self._trigger_in_thread and self._trigger_in_thread.is_alive():
-            self._trigger_in_thread.stop()
-            self._trigger_in_thread.join()
-
         if self._sync_thread and self._sync_thread.is_alive():
             self._sync_thread.stop()
             self._sync_thread.join()
@@ -187,10 +162,9 @@ class AcquisitionService(BaseService):
     def _device_alive(self):
         camera_alive = self._camera_backend.camera_alive()
         trigger_out_alive = self._trigger_out_thread and self._trigger_out_thread.is_alive()
-        trigger_in_alive = self._trigger_in_thread and self._trigger_in_thread.is_alive()
         sync_alive = self._sync_thread and self._sync_thread.is_alive()
 
-        return camera_alive and trigger_out_alive and trigger_in_alive and sync_alive
+        return camera_alive and trigger_out_alive and sync_alive
 
     def _clock_impulse_detected(self, timeout: float = None):
         try:
@@ -257,33 +231,6 @@ class AcquisitionService(BaseService):
                 self._camera_backend.sync_tick(timestamp_ns)
 
         logger.info("left _sync_fun")  # if left, it allows supervisor to restart if needed.
-
-    def _trigger_in_fun(self):
-        logger.info("_trigger_in_fun started")
-        while not current_thread().stopped():
-            if self._gpio_backend._trigger_in_flag.wait(timeout=1.0):
-                # if true, directly clear, because we trigger only once!
-                self._gpio_backend._trigger_in_flag.clear()
-                # maybe in future replace by this? lets see... https://superfastpython.com/thread-race-condition-timing/
-
-                # job is triggered by this flag.
-                self._flag_trigger_job.set()
-
-                if self._config.standalone_mode:
-                    # recommended to disable in production.
-                    logger.info("standalone mode is enabled! to use the job processor and connectivity, disable standalone mode in config!")
-                    frame = self.wait_for_hires_frame()
-                    self.done_hires_frames()
-
-                    filename = Path(f"img_{datetime.now().astimezone().strftime('%Y%m%d-%H%M%S-%f')}").with_suffix(".jpg")
-                    filepath = PATH_STANDALONE / filename
-
-                    with open(filepath, "wb") as f:
-                        f.write(self.encode_frame_to_image(frame, "jpeg"))
-
-                    logger.info(f"image saved to {filepath}")
-
-        logger.info("left _trigger_in_fun")  # if left, it allows supervisor to restart if needed.
 
     def _trigger_out_fun(self):
         while not current_thread().stopped():
