@@ -1,6 +1,11 @@
 # Wigglegram Camera
 
-Turn stereoscopic images into a wigglegram.
+Welcome to your brand-new open-source wigglecam! Turn stereoscopic images into a wigglegram.
+
+[![PyPI](https://img.shields.io/pypi/v/photobooth-app)](https://pypi.org/project/wigglecam/)
+[![ruff](https://github.com/photobooth-app/wigglecam/actions/workflows/ruff.yml/badge.svg)](https://github.com/photobooth-app/wigglecam/actions/workflows/ruff.yml)
+[![pytest](https://github.com/photobooth-app/wigglecam/actions/workflows/pytests.yml/badge.svg)](https://github.com/photobooth-app/wigglecam/actions/workflows/pytests.yml)
+[![codecov](https://codecov.io/gh/photobooth-app/wigglecam/graph/badge.svg?token=87aLWw2gIT)](https://codecov.io/gh/photobooth-app/wigglecam)
 
 ![demo wigglegram](https://raw.githubusercontent.com/photobooth-app/wigglecam/main/assets/wigglegram-demo1.gif)
 
