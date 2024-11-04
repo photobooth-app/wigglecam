@@ -296,12 +296,12 @@ class Picamera2Backend(AbstractCameraBackend):
                     logger.warning(f"camera timed out: {exc}")
                     break
 
-                self._current_timestampset.camera = picam_metadata["SensorTimestamp"]
+            self._current_timestampset.camera = picam_metadata["SensorTimestamp"]
 
-                try:
-                    self._barrier.wait()
-                except BrokenBarrierError:
-                    logger.debug("sync barrier broke")
-                    break
+            try:
+                self._barrier.wait()
+            except BrokenBarrierError:
+                logger.debug("sync barrier broke")
+                break
 
         logger.info("_camera_fun left")
