@@ -24,8 +24,8 @@ class AppConfig(BaseSettings):
 
     # groups -> setting items
     logging: ConfigLogging = ConfigLogging()
-    syncedacquisition: ConfigSyncedAcquisition = ConfigSyncedAcquisition()
-    jobconnected: ConfigJobConnected = ConfigJobConnected()
+    acquisition: ConfigSyncedAcquisition = ConfigSyncedAcquisition()
+    job: ConfigJobConnected = ConfigJobConnected()
 
     model_config = SettingsConfigDict(
         env_file_encoding="utf-8",

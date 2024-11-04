@@ -43,7 +43,7 @@ def main(args=None, run: bool = True):
     except BadPinFactory:
         print("Device not supported by gpiozero 😣")
         exit(-1)
-    _shutterbutton_in.when_pressed = container.synced_acquisition_service.trigger_execute_job
+    _shutterbutton_in.when_pressed = container.jobservice.trigger_execute_job
     logger.info(f"external trigger button on {_shutterbutton_in}")
 
     try:

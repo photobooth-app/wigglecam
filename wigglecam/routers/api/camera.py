@@ -28,7 +28,7 @@ def video_stream():
 
     try:
         return StreamingResponse(
-            content=container.synced_acquisition_service.gen_stream(), headers=headers, media_type="multipart/x-mixed-replace; boundary=frame"
+            content=container.acquisition_service.gen_stream(), headers=headers, media_type="multipart/x-mixed-replace; boundary=frame"
         )
     except ConnectionRefusedError as exc:
         logger.warning(exc)

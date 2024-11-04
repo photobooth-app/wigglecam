@@ -20,8 +20,8 @@ def create_basic_folders():
 class Container:
     # container
     logging_service = LoggingService(config=appconfig.logging)
-    synced_acquisition_service = AcquisitionService(config=appconfig.syncedacquisition)
-    jobconnectedservice = JobService(config=appconfig.jobconnected, acquisition_service=synced_acquisition_service)
+    acquisition_service = AcquisitionService(config=appconfig.acquisition)
+    jobservice = JobService(config=appconfig.job, acquisition_service=acquisition_service)
 
     def __init__(self):
         # ensure dirs are avail
