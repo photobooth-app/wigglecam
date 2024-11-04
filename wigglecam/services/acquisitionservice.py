@@ -93,6 +93,9 @@ class AcquisitionService(BaseService):
     def wait_for_hires_frame(self):
         return self._camera_backend.wait_for_hires_frame()
 
+    def done_hires_frames(self):
+        return self._camera_backend.done_hires_frames()
+
     def wait_for_hires_image(self, format: str):
         return self._camera_backend.wait_for_hires_image(format=format)
 

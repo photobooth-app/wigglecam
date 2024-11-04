@@ -164,7 +164,7 @@ class JobService(BaseService):
                     )
                 )
                 logger.info(f"got {i+1}/{self._current_job.request.number_captures} frames")
-
+            self._acquisition_service.done_hires_frames()
             assert len(frames) == self._current_job.request.number_captures
 
             # step 2:
