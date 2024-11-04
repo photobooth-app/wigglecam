@@ -2,7 +2,7 @@
 
 Welcome to your brand-new open-source wigglecam! Turn stereoscopic images into a wigglegram.
 
-[![PyPI](https://img.shields.io/pypi/v/photobooth-app)](https://pypi.org/project/wigglecam/)
+[![PyPI](https://img.shields.io/pypi/v/wigglecam)](https://pypi.org/project/wigglecam/)
 [![ruff](https://github.com/photobooth-app/wigglecam/actions/workflows/ruff.yml/badge.svg)](https://github.com/photobooth-app/wigglecam/actions/workflows/ruff.yml)
 [![pytest](https://github.com/photobooth-app/wigglecam/actions/workflows/pytests.yml/badge.svg)](https://github.com/photobooth-app/wigglecam/actions/workflows/pytests.yml)
 [![codecov](https://codecov.io/gh/photobooth-app/wigglecam/graph/badge.svg?token=87aLWw2gIT)](https://codecov.io/gh/photobooth-app/wigglecam)
@@ -37,47 +37,6 @@ sudo apt install -y python3-picamera2 python3-opencv python3-pip pipx git vim
 pipx ensurepath # reboot afterwards!
 
 pipx install --system-site-packages git+https://github.com/photobooth-app/wigglecam.git
-```
-
-#### Optimize Memory for Pi Zero 2
-
-Before
-    total: 427
-started:
-    avail: 303
-    swap used: 2
-app started and in idle:
-    avail: 87
-    swap used: 77
-app started some photos taken:
-    avail: 200
-    swap used: 150
-
-After
-    total: 459
-started:
-    avail: 330
-    swap used: 0
-app started and in idle:
-    avail: 106
-    swap used: 2
-app started some photos taken:
-    total: 200
-    swap used: 25
-
-```sh
-sudo systemctl disable apt-daily-upgrade.timer
-sudo systemctl disable apt-daily-upgrade.service
-sudo systemctl disable apt-daily.timer
-sudo systemctl disable apt-daily.service
-```
-
-```ini
-gpu_mem=32
-arm_boost=0
-max_framebuffers=1
-dtoverlay=disable-bt
-dtparam=audio=off
 ```
 
 #### Basic configuration
@@ -130,12 +89,12 @@ Edit `~/.env.primary` and place following for the reference 3d printed wigglecam
 
 ```sh
 # enable clock generator on primary:
-syncedacquisition__io_backends__gpio__is_primary="True"
-syncedacquisition__io_backends__gpio__fps_nominal=5
-syncedacquisition__io_backends__gpio__pwmchip="pwmchip0" # or pwmchip2 for Pi5
-syncedacquisition__io_backends__gpio__pwm_channel=0 # or 2 for Pi5
+acquisition__io_backends__gpio__is_primary="True"
+acquisition__io_backends__gpio__fps_nominal=5
+acquisition__io_backends__gpio__pwmchip="pwmchip0" # or pwmchip2 for Pi5
+acquisition__io_backends__gpio__pwm_channel=0 # or 2 for Pi5
 # primary is also preview display device:
-syncedacquisition__camera_backends__picamera2__enable_preview_display="True"
+acquisition__camera_backends__picamera2__enable_preview_display="True"
 ```
 
 Edit `~/.env.node` and place following for the reference 3d printed wigglecam:
@@ -171,8 +130,9 @@ Restart=always
 # working directory is used as datafolder
 WorkingDirectory=%h/
 Environment="QT_QPA_PLATFORM=linuxfb"
-#ExecStart=/home/pi/.local/bin/wigglecam_minimal # true for pipx install
-ExecStart=/home/pi/.local/bin/wigglecam_api # true for pipx install
+#ExecStart=/home/pi/.local/bin/wigglecam-mobile # true for pipx install
+#ExecStart=/home/pi/.local/bin/wigglecam-gui # true for pipx install
+ExecStart=/home/pi/.local/bin/wigglecam-node # true for pipx install
 
 [Install]
 WantedBy=default.target
