@@ -13,8 +13,8 @@ permissions:
 jobs:
   tests:
     env:
-      syncedacquisition__camera_backends__active_backend: VirtualCamera
-      syncedacquisition__io_backends__active_backend: VirtualIo
+      acquisition__camera_backends__active_backend: VirtualCamera
+      acquisition__io_backends__active_backend: VirtualIo
 
     runs-on: ubuntu-latest
     continue-on-error: false
