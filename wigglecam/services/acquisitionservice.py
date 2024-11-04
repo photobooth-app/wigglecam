@@ -273,6 +273,7 @@ class AcquisitionService(BaseService):
                     # recommended to disable in production.
                     logger.info("standalone mode is enabled! to use the job processor and connectivity, disable standalone mode in config!")
                     frame = self.wait_for_hires_frame()
+                    frame = self.done_hires_frames()
 
                     filename = Path(f"img_{datetime.now().astimezone().strftime('%Y%m%d-%H%M%S-%f')}").with_suffix(".jpg")
                     filepath = PATH_STANDALONE / filename
