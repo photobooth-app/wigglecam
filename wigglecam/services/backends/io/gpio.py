@@ -127,7 +127,7 @@ class GpioBackend(AbstractIoBackend):
             Path(PWM_SYSFS / "export").write_text(f"{PWM_CHANNEL}\n")
             time.sleep(0.1)
 
-        while not os.access(pwm_dir, os.F_OK):
+        while not os.access(pwm_dir / "enable", os.F_OK):
             logger.info("waiting for sysfs to be accessible after export...")
             time.sleep(0.1)
 
