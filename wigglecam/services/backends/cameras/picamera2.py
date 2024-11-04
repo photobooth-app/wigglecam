@@ -149,8 +149,11 @@ class Picamera2Backend(AbstractCameraBackend):
             if not self._hires_data.condition.wait(timeout=2.0):
                 raise TimeoutError("timeout receiving frames")
 
-            self._hires_data.request_hires_still.clear()
+            # self._hires_data.request_hires_still.clear()
             return self._hires_data.frame
+
+    def done_hires_frames(self):
+        self._hires_data.request_hires_still.clear()
 
     def wait_for_hires_image(self, format: str) -> bytes:
         return super().wait_for_hires_image(format=format)
@@ -276,7 +279,7 @@ class Picamera2Backend(AbstractCameraBackend):
         while not current_thread().stopped():
             if self._hires_data.request_hires_still.is_set():
                 # only capture one pic and return, overlying classes are responsible to ask again if needed fast enough
-                self._hires_data.request_hires_still.clear()
+                # self._hires_data.request_hires_still.clear()
 
                 # capture hq picture
                 with self._picamera2.captured_request(wait=1.5) as request:

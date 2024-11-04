@@ -49,6 +49,9 @@ class VirtualCameraBackend(AbstractCameraBackend):
     def wait_for_hires_image(self, format: str):
         return super().wait_for_hires_image(format=format)
 
+    def done_hires_frames(self):
+        pass
+
     def encode_frame_to_image(self, frame, format: str) -> bytes:
         # for virtualcamera frame == jpeg data, so no convertion needed.
         if format == "jpeg":

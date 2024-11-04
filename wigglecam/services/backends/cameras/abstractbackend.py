@@ -129,8 +129,14 @@ class AbstractCameraBackend(ABC):
         pass
 
     @abstractmethod
+    def done_hires_frames(self):
+        pass
+
+    @abstractmethod
     def wait_for_hires_image(self, format: str) -> bytes:
-        return self.encode_frame_to_image(self.wait_for_hires_frame(), format)
+        out = self.encode_frame_to_image(self.wait_for_hires_frame(), format)
+        self.done_hires_frames()  # means with direct encoding this is really only for one-time shots, otherwise better wait_for_hires_frames
+        return out
 
     @abstractmethod
     def encode_frame_to_image(self, frame, format: str) -> bytes:
