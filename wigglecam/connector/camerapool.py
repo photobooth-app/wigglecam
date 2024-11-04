@@ -25,7 +25,7 @@ class CameraPool:
         primary_nodes = [node for node in self._nodes if node.is_primary]
 
         if len(primary_nodes) != 1:
-            raise RuntimeError(f"configured {len(primary_nodes)} but need exactly 1. Please check configuration.")
+            raise RuntimeError(f"configured {len(primary_nodes)} primary node but need exactly 1. Please check configuration.")
 
         return primary_nodes[0]
 

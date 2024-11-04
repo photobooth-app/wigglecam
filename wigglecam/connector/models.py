@@ -22,6 +22,11 @@ class ConfigCameraNode(BaseModel):
 
 class ConfigCameraPool(BaseModel):
     nodes: list[ConfigCameraNode] = Field(
-        default=[ConfigCameraNode()],
+        default=[
+            ConfigCameraNode(
+                description="TestNode",
+                is_primary=True,
+            )
+        ],
         description="List of camera nodes. The sequence is relevant when stitching the final photograph.",
     )
