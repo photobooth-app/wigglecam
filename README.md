@@ -21,7 +21,11 @@ Welcome to your brand-new open-source wigglecam! Turn stereoscopic images into a
 🧪 3d printed enclosure  
 🧪 Creating smooth videos from just two images using frame interpolation AI algorithms  
 
-## Setup
+## Hardware
+
+![wiring diagram overview](https://raw.githubusercontent.com/photobooth-app/wigglecam/main/assets/wiringdiagram.png)
+
+## Software Setup
 
 ### Prepare the Systems
 
