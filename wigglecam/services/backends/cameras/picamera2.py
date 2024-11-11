@@ -9,6 +9,7 @@ from libcamera import Transform, controls
 from picamera2 import Picamera2, Preview
 from picamera2.encoders import MJPEGEncoder, Quality
 from picamera2.outputs import FileOutput
+from PIL import Image
 
 from ...config.models import ConfigBackendPicamera2
 from .abstractbackend import AbstractCameraBackend, Formats, StreamingOutput
@@ -166,19 +167,21 @@ class Picamera2Backend(AbstractCameraBackend):
         return super().wait_for_hires_image(format=format)
 
     def encode_frame_to_image(self, frame, format: Formats) -> bytes:
-        # for picamera2 frame is a  == jpeg data, so no convertion needed.
+        # for picamera2 frame is a picamera2 buffer so conversion needed. can be RGB or YUV420 depending on memory opt
         if format == "jpeg":
             tms = time.time()
+            bytes_io = io.BytesIO()
 
             if self._config.optimize_memoryconsumption:
                 logger.info("enabled memory optimization so frame is in YUV420 and converted to RGB now")
-                print(frame.shape)
                 # need to convert from YUV420 to RGB before processing jpg because PIL accepts only RGB
                 # currently this is the only place cv2 is used, maybe there is another way to save cv2 from being used on nodes.
-                frame = cv2.cvtColor(frame, cv2.COLOR_YUV420p2RGB)
+                array = self._picamera2.helpers.make_array(frame, self._picamera2.camera_config["main"])
+                array = cv2.cvtColor(array, cv2.COLOR_YUV420p2RGB)
+                image = Image.fromarray(array, "RGB")
+            else:
+                image = self._picamera2.helpers.make_image(frame, self._picamera2.camera_config["main"])
 
-            bytes_io = io.BytesIO()
-            image = self._picamera2.helpers.make_image(frame, self._picamera2.camera_config["main"])
             image.save(bytes_io, format="jpeg", quality=self._config.original_still_quality)
             out = bytes_io.getbuffer()
 
