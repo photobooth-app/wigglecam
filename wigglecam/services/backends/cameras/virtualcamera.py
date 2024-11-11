@@ -1,5 +1,6 @@
 import io
 import logging
+import random
 import time
 from threading import BrokenBarrierError, Condition, current_thread
 
@@ -7,7 +8,7 @@ import numpy
 from PIL import Image
 
 from ...config.models import ConfigBackendVirtualCamera
-from .abstractbackend import AbstractCameraBackend
+from .abstractbackend import AbstractCameraBackend, Formats
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,8 @@ class VirtualCameraBackend(AbstractCameraBackend):
         # declarations
         self._data_bytes: bytes = None
         self._data_condition: Condition = None
+        self._offset_x: int = None
+        self._offset_y: int = None
 
         # initializiation
         self._data_bytes: bytes = None
@@ -28,6 +31,12 @@ class VirtualCameraBackend(AbstractCameraBackend):
 
     def start(self, nominal_framerate: int = None):
         super().start(nominal_framerate=nominal_framerate)
+
+        # on every start place the circle slightly different to the center. could be used for feature detection and align algo testing
+        self._offset_x = random.randint(5, 20)
+        self._offset_y = random.randint(5, 20)
+
+        logger.info(f"initialized virtual camera with random offset=({self._offset_x},{self._offset_y})")
 
     def stop(self):
         super().stop()
@@ -46,25 +55,38 @@ class VirtualCameraBackend(AbstractCameraBackend):
     def wait_for_hires_frame(self):
         return self.wait_for_lores_image()
 
-    def wait_for_hires_image(self, format: str):
+    def wait_for_hires_image(self, format: Formats):
         return super().wait_for_hires_image(format=format)
 
     def done_hires_frames(self):
         pass
 
-    def encode_frame_to_image(self, frame, format: str) -> bytes:
-        # for virtualcamera frame == jpeg data, so no convertion needed.
+    def encode_frame_to_image(self, frame, format: Formats) -> bytes:
         if format == "jpeg":
+            # for virtualcamera frame == jpeg data, so no convertion needed.
             return frame
         else:
             raise NotImplementedError
 
     def _produce_dummy_image(self) -> bytes:
-        byte_io = io.BytesIO()
-        imarray = numpy.random.rand(250, 250, 3) * 255
-        random_image = Image.fromarray(imarray.astype("uint8"), "RGB")
-        random_image.save(byte_io, format="JPEG", quality=50)
+        from PIL import ImageDraw
 
+        offset_x = self._offset_x
+        offset_y = self._offset_y
+
+        size = 250
+        ellipse_divider = 3
+        byte_io = io.BytesIO()
+
+        mask = Image.new("L", (size, size), 0)
+        draw = ImageDraw.Draw(mask)
+        draw.ellipse((0, 0) + (size // ellipse_divider, size // ellipse_divider), fill=255)
+
+        imarray = numpy.random.rand(size, size, 3) * 255
+        random_image = Image.fromarray(imarray.astype("uint8"), "RGB")
+        random_image.paste(mask, (size // ellipse_divider + offset_x, size // ellipse_divider + offset_y), mask=mask)
+
+        random_image.save(byte_io, format="JPEG", quality=50)
         return byte_io.getbuffer()
 
     def wait_for_lores_image(self) -> bytes:

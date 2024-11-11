@@ -17,7 +17,7 @@ class VirtualIoBackend(AbstractIoBackend):
 
         self._gpio_thread: StoppableThread = None
 
-    def start(self):
+    def start(self, is_primary: bool = None):
         super().start()
 
         self._gpio_thread = StoppableThread(name="_gpio_thread", target=self._gpio_fun, args=(), daemon=True)

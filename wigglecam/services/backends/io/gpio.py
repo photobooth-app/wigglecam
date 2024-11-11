@@ -28,12 +28,14 @@ class GpioBackend(AbstractIoBackend):
         self._queue_trigger_out: Queue[bool] = None
 
         # init private props
-        pass
+        self._is_primary: bool = False
 
-    def start(self):
+    def start(self, is_primary: bool = None):
         super().start()
 
-        if self._config.is_primary:
+        self._is_primary = is_primary
+
+        if self._is_primary is True:
             logger.info("loading primary clockwork service")
             self._set_hardware_clock(enable=True)
             logger.info("generating clock using hardware pwm overlay")
@@ -54,7 +56,7 @@ class GpioBackend(AbstractIoBackend):
     def stop(self):
         super().stop()
 
-        if self._config.is_primary:
+        if self._is_primary is True:
             self._set_hardware_clock(enable=False)
 
         if self._gpio_monitor_thread and self._gpio_monitor_thread.is_alive():

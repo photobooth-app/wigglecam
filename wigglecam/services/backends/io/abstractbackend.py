@@ -10,6 +10,7 @@ class AbstractIoBackend(ABC):
         self._clock_fall_in_condition: Condition = None
         self._trigger_in_flag: Event = None
         self._clock_in_timestamp_ns = None
+        self._is_primary: bool = None
 
         # abstract common properties init
         self._clock_rise_in_condition: Condition = Condition()
@@ -20,7 +21,7 @@ class AbstractIoBackend(ABC):
         return f"{self.__class__}"
 
     @abstractmethod
-    def start(self):
+    def start(self, is_primary: bool = None):
         pass
 
     @abstractmethod
