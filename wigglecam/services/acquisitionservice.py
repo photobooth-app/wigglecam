@@ -1,15 +1,22 @@
 import logging
 import time
+from dataclasses import dataclass
 from importlib import import_module
 from threading import Event, current_thread
 
 from ..utils.stoppablethread import StoppableThread
-from .backends.cameras.abstractbackend import AbstractCameraBackend
+from .backends.cameras.abstractbackend import AbstractCameraBackend, Formats
 from .backends.io.abstractbackend import AbstractIoBackend
 from .baseservice import BaseService
 from .config.models import ConfigSyncedAcquisition
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class CameraParameters:
+    iso: int | None = None
+    shutter: int | None = None
 
 
 class AcquisitionService(BaseService):
@@ -46,7 +53,7 @@ class AcquisitionService(BaseService):
         )
         logger.debug(f"loaded {self._camera_backend}")
 
-        self._gpio_backend.start()
+        self._gpio_backend.start(is_primary=self._config.is_primary)
 
         self._supervisor_thread = StoppableThread(name="_supervisor_thread", target=self._supervisor_fun, args=(), daemon=True)
         self._supervisor_thread.start()
@@ -82,10 +89,10 @@ class AcquisitionService(BaseService):
     def done_hires_frames(self):
         return self._camera_backend.done_hires_frames()
 
-    def wait_for_hires_image(self, format: str):
+    def wait_for_hires_image(self, format: Formats):
         return self._camera_backend.wait_for_hires_image(format=format)
 
-    def encode_frame_to_image(self, frame, format: str):
+    def encode_frame_to_image(self, frame, format: Formats):
         return self._camera_backend.encode_frame_to_image(frame, format)
 
     def gen_stream(self):

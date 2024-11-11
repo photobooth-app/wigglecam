@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from threading import current_thread
 
+from ..utils.simpledb import SimpleDb
 from ..utils.stoppablethread import StoppableThread
 from .acquisitionservice import AcquisitionService
 from .baseservice import BaseService
@@ -24,6 +25,7 @@ PATH_ORIGINAL = DATA_PATH / "original"
 @dataclass
 class JobRequest:
     number_captures: int = 1
+    # TODO: maybe captures:list[bool]=[True] # True=capture, False=skip
 
 
 @dataclass
@@ -60,9 +62,12 @@ class JobService(BaseService):
         self._acquisition_service: AcquisitionService = acquisition_service
 
         # declare private props
-        self._db_jobs: list[JobItem] = []
+        self._db: SimpleDb[JobItem] = None
         self._jobprocessor_thread: StoppableThread = None
         self._current_job: JobItem = None
+
+        # init
+        self._db: SimpleDb[JobItem] = SimpleDb[JobItem]()
 
         # ensure data directories exist
         os.makedirs(f"{PATH_ORIGINAL}", exist_ok=True)
@@ -84,48 +89,6 @@ class JobService(BaseService):
 
         logger.debug(f"{self.__module__} stopped")
 
-    def db_add_jobitem(self, job: JobItem):
-        self._db_jobs.insert(0, job)  # insert at first position (prepend)
-
-    def db_get_jobitem(self, id: uuid):
-        return self._db_jobs[-1]
-
-    def db_update_jobitem(self, updated_item: JobItem):
-        for idx, item in enumerate(self._db_jobs):
-            if updated_item == item:
-                self._db_jobs[idx] = updated_item
-
-        return self._db_jobs[idx]
-
-    def db_del_jobitem(self, job: JobItem):
-        self._db_jobs.remove(job)
-
-    def db_clear(self):
-        self._db_jobs.clear()
-
-    def db_get_list_as_dict(self) -> list:
-        return [job.asdict() for job in self._db_jobs]
-
-    def db_get_list(self) -> list[JobItem]:
-        return [job for job in self._db_jobs]
-
-    def db_get_jobitem_by_id(self, job_id: str):
-        if not isinstance(job_id, str):
-            raise RuntimeError("job_id is wrong type")
-
-        # https://stackoverflow.com/a/7125547
-        job = next((x for x in self._db_jobs if x.id == job_id), None)
-
-        if job is None:
-            logger.error(f"image {job_id} not found!")
-            raise FileNotFoundError(f"image {job_id} not found!")
-
-        return job
-
-    @property
-    def db_length(self) -> int:
-        return len(self._db_jobs)
-
     def setup_job_request(self, jobrequest: JobRequest) -> JobItem:
         if self._current_job:
             raise ConnectionRefusedError("there is already an unprocessed job! reset first to queue a new job or process it")
@@ -133,9 +96,12 @@ class JobService(BaseService):
         self._acquisition_service.clear_trigger_job_flag()  # reset, otherwise if it was set, the job is processed immediately
 
         self._current_job = JobItem(request=jobrequest)
-        self.db_add_jobitem(self._current_job)
+        self._db.add_item(self._current_job)
 
         return self._current_job
+
+    def reset_job(self):
+        self._current_job = None
 
     def trigger_execute_job(self):
         # TODO: all this should run only on primary device! it's not validated, the connector needs to ensure to call the right device currently.
@@ -194,7 +160,7 @@ class JobService(BaseService):
                 else:
                     # update jobitem:
                     logger.info(self._current_job)
-                    self.db_update_jobitem(self._current_job)
+                    self._db.update_item(self._current_job)
                     logger.info("finished job successfully")
                 finally:
                     self._current_job = None
