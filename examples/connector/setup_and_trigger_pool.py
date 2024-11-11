@@ -19,7 +19,8 @@ def main(args=None):
         print(f"Error processing: {exc}")
         print(camera_pool.print_nodes_status())
     else:
-        print("job sent")
+        print("Job sent successful, result:")
+        print(res)
 
 
 if __name__ == "__main__":

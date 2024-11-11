@@ -1,4 +1,6 @@
 import logging
+from dataclasses import asdict, dataclass
+from functools import cached_property
 
 import requests
 
@@ -9,47 +11,102 @@ from .models import ConfigCameraNode
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class NodeStatus:
+    description: str = None
+    can_connect: bool = None
+    is_healthy: bool = None
+    is_primary: bool = None
+    status: str = None
+
+
 class CameraNode:
     def __init__(self, config: ConfigCameraNode = None):
         # init the arguments
         self._config: ConfigCameraNode = config
 
         # define private props
-        pass
-
-    def start(self):
         self._session = requests.Session()
 
         logger.debug(f"{self.__module__} started")
 
-    def stop(self):
+    def __del__(self):
         self._session.close()
 
         logger.debug(f"{self.__module__} stopped")
 
+    def get_node_status(self) -> list[NodeStatus]:
+        """used to get some status information for external listing. covers runtime errors so CLI output looks nice.
+
+        Returns:
+            list[NodeStatus]: _description_
+        """
+        out = NodeStatus()
+
+        try:
+            out.description = self._config.description
+            out.can_connect = self.can_connect
+            out.is_healthy = self.is_healthy
+            out.is_primary = self.is_primary
+        except Exception as exc:
+            out.status = f"Error: {exc}"
+        else:
+            out.status = "OK"
+
+        return out
+
+    @property
+    def config(self) -> ConfigCameraNode:
+        return self._config
+
+    @property
+    def can_connect(self):
+        try:
+            self._get_request("system/is_healthy")
+            return True
+        except Exception:
+            return False
+
     @property
     def is_healthy(self):
-        return True  # ping all and check if all online within xxx ms.
+        try:
+            return self._get_request("system/is_healthy")
+        except Exception:
+            return False
 
-    @property
+    @cached_property
     def is_primary(self):
-        return self._config.is_primary
+        try:
+            return self._get_request("system/is_primary")
+        except Exception as exc:
+            raise RuntimeError("cannot determine is_primary status of node.") from exc
+
+    #
+    # connection endpoints
+    #
+    def camera_still(self):
+        return self._get_request("camera/still")
 
     def job_setup(self, jobrequest: JobRequest):
-        return self._post_request("job/setup", jobrequest)
+        return self._post_request("job/setup", asdict(jobrequest))
 
-    def job_trigger(self):
-        if not self._config.is_primary:
+    def job_reset(self):
+        return self._get_request("job/reset")
+
+    def trigger(self):
+        if not self.is_primary:
             raise RuntimeError("can trigger only primary node!")
 
-        self._get_request("job/trigger")
+        return self._get_request("job/trigger")
 
     def job_getresults(self):
         raise NotImplementedError
 
-    def _post_request(self, request, data):
+    def _post_request(self, request, data: dict | list):
         try:
-            r = self._session.post(f"{self._config.base_url}/api/{request}", data=data)
+            # https://requests.readthedocs.io/en/stable/user/advanced/#timeouts
+            # stupid documentation: json takes dict! not json encoded string
+            r = self._session.post(f"{self._config.base_url}/api/{request}", json=data, timeout=(1, 5))
             r.raise_for_status()
         except Exception as exc:
             raise exc
@@ -58,7 +115,8 @@ class CameraNode:
 
     def _get_request(self, request):
         try:
-            r = self._session.get(f"{self._config.base_url}/api/{request}")
+            # https://requests.readthedocs.io/en/stable/user/advanced/#timeouts
+            r = self._session.get(f"{self._config.base_url}/api/{request}", timeout=(1, 5))
             r.raise_for_status()
         except Exception as exc:
             raise exc

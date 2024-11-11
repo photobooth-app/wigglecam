@@ -1,3 +1,6 @@
+import uuid
+from dataclasses import dataclass, field
+
 from pydantic import BaseModel, Field, HttpUrl
 
 # class Calibration(BaseModel):
@@ -11,22 +14,34 @@ class ConfigCameraNode(BaseModel):
         description="Not used in the app, you can use it to identify the node.",
     )
     base_url: HttpUrl = Field(
-        default="http://localhost:8000",
-        description="Base URL (including port) the node can be accessed by.",
-    )
-    is_primary: bool = Field(
-        default=False,
-        description="The primary device triggers the other nodes, there can only be exactly 1 primary node.",
+        default="http://127.0.0.1:8000",
+        description="Base URL (including port) the node can be accessed by. Based on your setup, usually IP is preferred over hostname.",
     )
 
 
 class ConfigCameraPool(BaseModel):
-    nodes: list[ConfigCameraNode] = Field(
-        default=[
-            ConfigCameraNode(
-                description="TestNode",
-                is_primary=True,
+    keep_node_copy: bool = False
+
+
+@dataclass
+class CameraPoolJobRequest:
+    sequential: bool = False  # sync or sequential each tick next node?
+    number_captures: int = 1
+
+
+@dataclass
+class CameraPoolJobItem:
+    request: CameraPoolJobRequest
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+    node_ids: list[uuid.UUID] = field(default_factory=list)
+
+    def asdict(self) -> dict:
+        out = {
+            prop: getattr(self, prop)
+            for prop in dir(self)
+            if (
+                not prop.startswith("_")  # no privates
+                and not callable(getattr(__class__, prop, None))  # no callables
             )
-        ],
-        description="List of camera nodes. The sequence is relevant when stitching the final photograph.",
-    )
+        }
+        return out
