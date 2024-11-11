@@ -171,6 +171,8 @@ class Picamera2Backend(AbstractCameraBackend):
             tms = time.time()
 
             if self._config.optimize_memoryconsumption:
+                logger.info("enabled memory optimization so frame is in YUV420 and converted to RGB now")
+                print(frame.shape)
                 # need to convert from YUV420 to RGB before processing jpg because PIL accepts only RGB
                 # currently this is the only place cv2 is used, maybe there is another way to save cv2 from being used on nodes.
                 frame = cv2.cvtColor(frame, cv2.COLOR_YUV420p2RGB)
