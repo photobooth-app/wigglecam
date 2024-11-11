@@ -177,7 +177,7 @@ class Picamera2Backend(AbstractCameraBackend):
                 # need to convert from YUV420 to RGB before processing jpg because PIL accepts only RGB
                 # currently this is the only place cv2 is used, maybe there is another way to save cv2 from being used on nodes.
                 array = self._picamera2.helpers.make_array(frame, self._picamera2.camera_config["main"])
-                array = cv2.cvtColor(array, cv2.COLOR_YUV420p2RGB)
+                array = cv2.cvtColor(array, cv2.COLOR_YUV420p2BGR)  # yes, this is correct ^^
                 image = Image.fromarray(array, "RGB")
             else:
                 image = self._picamera2.helpers.make_image(frame, self._picamera2.camera_config["main"])
