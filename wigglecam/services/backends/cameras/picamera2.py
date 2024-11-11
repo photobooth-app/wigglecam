@@ -4,13 +4,14 @@ import logging
 import time
 from threading import BrokenBarrierError, Condition, Event, current_thread
 
+import cv2
 from libcamera import Transform, controls
 from picamera2 import Picamera2, Preview
 from picamera2.encoders import MJPEGEncoder, Quality
 from picamera2.outputs import FileOutput
 
 from ...config.models import ConfigBackendPicamera2
-from .abstractbackend import AbstractCameraBackend, StreamingOutput
+from .abstractbackend import AbstractCameraBackend, Formats, StreamingOutput
 
 logger = logging.getLogger(__name__)
 
@@ -58,18 +59,24 @@ class Picamera2Backend(AbstractCameraBackend):
         self._picamera2: Picamera2 = Picamera2(camera_num=self._config.camera_num)
 
         # configure; camera needs to be stopped before
-        self._picamera2.configure(
-            self._picamera2.create_still_configuration(
-                main={"size": (self._config.CAPTURE_CAM_RESOLUTION_WIDTH, self._config.CAPTURE_CAM_RESOLUTION_HEIGHT)},
-                lores={"size": (self._config.LIVEVIEW_RESOLUTION_WIDTH, self._config.LIVEVIEW_RESOLUTION_HEIGHT)},
-                encode="lores",
-                display="lores",
-                buffer_count=2,
-                queue=True,  # TODO: validate. Seems False is working better on slower systems? but also on Pi5?
-                controls={"FrameRate": self._nominal_framerate},
-                transform=Transform(hflip=False, vflip=False),
-            )
+        append_optmemory_format = {}
+        if self._config.optimize_memoryconsumption:
+            logger.info("enabled memory optimization by choosing YUV420 format for main/lores streams")
+            # if using YUV420 on main, also disable NoisReduction because it's done in software and causes framerate dropping on vc4 devices
+            # https://github.com/raspberrypi/picamera2/discussions/1158#discussioncomment-11212355
+            append_optmemory_format = {"format": "YUV420"}
+
+        camera_configuration = self._picamera2.create_still_configuration(
+            main={"size": (self._config.CAPTURE_CAM_RESOLUTION_WIDTH, self._config.CAPTURE_CAM_RESOLUTION_HEIGHT), **append_optmemory_format},
+            lores={"size": (self._config.LIVEVIEW_RESOLUTION_WIDTH, self._config.LIVEVIEW_RESOLUTION_HEIGHT), **append_optmemory_format},
+            encode="lores",
+            display="lores",
+            buffer_count=2,
+            queue=True,  # TODO: validate. Seems False is working better on slower systems? but also on Pi5?
+            controls={"FrameRate": self._nominal_framerate, "NoiseReductionMode": controls.draft.NoiseReductionModeEnum.Off},
+            transform=Transform(hflip=False, vflip=False),
         )
+        self._picamera2.configure(camera_configuration)
 
         if self._config.enable_preview_display:
             logger.info("starting display preview")
@@ -155,20 +162,26 @@ class Picamera2Backend(AbstractCameraBackend):
     def done_hires_frames(self):
         self._hires_data.request_hires_still.clear()
 
-    def wait_for_hires_image(self, format: str) -> bytes:
+    def wait_for_hires_image(self, format: Formats) -> bytes:
         return super().wait_for_hires_image(format=format)
 
-    def encode_frame_to_image(self, frame, format: str) -> bytes:
+    def encode_frame_to_image(self, frame, format: Formats) -> bytes:
         # for picamera2 frame is a  == jpeg data, so no convertion needed.
         if format == "jpeg":
             tms = time.time()
 
+            if self._config.optimize_memoryconsumption:
+                # need to convert from YUV420 to RGB before processing jpg because PIL accepts only RGB
+                # currently this is the only place cv2 is used, maybe there is another way to save cv2 from being used on nodes.
+                frame = cv2.cvtColor(frame, cv2.COLOR_YUV420p2RGB)
+
             bytes_io = io.BytesIO()
             image = self._picamera2.helpers.make_image(frame, self._picamera2.camera_config["main"])
             image.save(bytes_io, format="jpeg", quality=self._config.original_still_quality)
-            logger.info(f"jpg encode finished, time taken: {round((time.time() - tms)*1.0e3, 0)}ms")
+            out = bytes_io.getbuffer()
 
-            return bytes_io.getbuffer()
+            logger.info(f"jpg encode finished, time taken: {round((time.time() - tms)*1.0e3, 0)}ms")
+            return out
 
         else:
             raise NotImplementedError

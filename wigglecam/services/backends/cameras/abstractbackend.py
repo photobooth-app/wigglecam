@@ -3,10 +3,12 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from threading import Barrier, BrokenBarrierError, Condition, Event
+from typing import Literal
 
 from ....utils.stoppablethread import StoppableThread
 
 logger = logging.getLogger(__name__)
+Formats = Literal["jpeg"]  # only jpeg for now
 
 
 class StreamingOutput(io.BufferedIOBase):
@@ -133,13 +135,13 @@ class AbstractCameraBackend(ABC):
         pass
 
     @abstractmethod
-    def wait_for_hires_image(self, format: str) -> bytes:
+    def wait_for_hires_image(self, format: Formats) -> bytes:
         out = self.encode_frame_to_image(self.wait_for_hires_frame(), format)
         self.done_hires_frames()  # means with direct encoding this is really only for one-time shots, otherwise better wait_for_hires_frames
         return out
 
     @abstractmethod
-    def encode_frame_to_image(self, frame, format: str) -> bytes:
+    def encode_frame_to_image(self, frame, format: Formats) -> bytes:
         pass
 
     @abstractmethod

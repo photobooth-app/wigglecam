@@ -14,8 +14,6 @@ class ConfigBackendVirtualIo(BaseModel):
 class ConfigBackendGpio(BaseModel):
     clock_in_pin_name: str = Field(default="GPIO14")
     trigger_in_pin_name: str = Field(default="GPIO15")
-
-    is_primary: bool = Field(default=False)
     fps_nominal: int = Field(default=9)  # needs to be lower than cameras mode max fps to allow for control reserve
     chip: str = Field(default="/dev/gpiochip0")
     pwmchip: str = Field(default="pwmchip2")  # pi5: pwmchip2, other pwmchip0
@@ -29,6 +27,8 @@ class ConfigBackendVirtualCamera(BaseModel):
 
 class ConfigBackendPicamera2(BaseModel):
     camera_num: int = Field(default=0)
+    optimize_memoryconsumption: bool = Field(default=True)
+
     CAPTURE_CAM_RESOLUTION_WIDTH: int = Field(default=4608)
     CAPTURE_CAM_RESOLUTION_HEIGHT: int = Field(default=2592)
     enable_preview_display: bool = Field(default=False)
@@ -64,6 +64,8 @@ class GroupIoBackend(BaseModel):
 
 
 class ConfigSyncedAcquisition(BaseModel):
+    is_primary: bool = Field(default=False)
+
     camera_backends: GroupCameraBackend = Field(default=GroupCameraBackend())
     io_backends: GroupIoBackend = Field(default=GroupIoBackend())
 
