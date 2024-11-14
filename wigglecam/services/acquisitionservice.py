@@ -232,7 +232,7 @@ class AcquisitionService(BaseService):
                 timestamp_ns = self._gpio_backend.wait_for_clock_rise_signal(timeout=1)
             except TimeoutError:
                 # stop devices when no clock is avail, supervisor enables again after clock is received, derives new framerate ans starts backends
-                logger.error("clock signal missing.")
+                logger.warning("clock signal missing.")
                 break
             else:
                 self._camera_backend.sync_tick(timestamp_ns)

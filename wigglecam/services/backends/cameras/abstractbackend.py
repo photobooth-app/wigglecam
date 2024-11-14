@@ -2,7 +2,7 @@ import io
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from queue import Full, Queue
+from queue import Empty, Full, Queue
 from threading import Barrier, BrokenBarrierError, Condition, Event, current_thread
 from typing import Literal
 
@@ -149,7 +149,10 @@ class AbstractCameraBackend(ABC):
         logger.debug("starting _ticker_fun")
 
         while not current_thread().stopped():
-            self._current_timestampset.reference = self._current_timestamp_reference_in_queue.get(block=True, timeout=1.0)
+            try:
+                self._current_timestampset.reference = self._current_timestamp_reference_in_queue.get(block=True, timeout=1.0)
+            except Empty:
+                logger.warning("did not receive updated reference timestamp within timeout")
 
             try:
                 self._barrier.wait()
