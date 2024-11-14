@@ -107,8 +107,9 @@ class AbstractCameraBackend(ABC):
         try:
             self._current_timestamp_reference_in_queue.put(timestamp_ns, block=True, timeout=0.5 / self._nominal_framerate)
         except Full:
-            # this happens if the reference and camera are totally out of sync. It should recover from this state or maybe need to remove old timestamp and place new always?
-            print("queue full, could not place updated ref time, skip and continue...")
+            # this happens if the reference and camera are totally out of sync.
+            # It should recover from this state or maybe need to remove old timestamp and place new always?
+            logger.warning("queue full, could not place updated ref time, skip and continue...")
 
     @abstractmethod
     def start_stream(self):
