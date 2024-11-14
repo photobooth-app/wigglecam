@@ -145,11 +145,9 @@ class AbstractCameraBackend(ABC):
         pass
 
     def _ticker_fun(self):
-        # TODO: somewhere else:
         logger.debug("starting _ticker_fun")
 
         while not current_thread().stopped():
-            #  - 0.2 * 1e9  # TODO: this one improved continuous capture on pi3! why?
             self._current_timestampset.reference = self._current_timestamp_reference_in_queue.get(block=True, timeout=1.0)
 
             try:
