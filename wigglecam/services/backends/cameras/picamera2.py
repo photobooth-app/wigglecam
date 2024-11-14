@@ -238,7 +238,7 @@ class Picamera2Backend(AbstractCameraBackend):
 
     def _backend_align(self):
         # in picamera2 backend the current time ref is mapped to the frame captured in prior cycle
-        self._current_timestampset.reference -= int((1.0 / self._nominal_framerate) * 1e9)
+        self._current_timestampset.reference += int((1.0 / self._nominal_framerate) * 1e9)
         timestamp_delta_ns = self._current_timestampset.camera - self._current_timestampset.reference  # in ns
 
         if self._adjust_cycle_counter >= ADJUST_EVERY_X_CYCLE:
