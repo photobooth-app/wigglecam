@@ -276,7 +276,7 @@ class Picamera2Backend(AbstractCameraBackend):
                 # even in debug reduce verbosity a bit if all is fine and within 2ms tolerance
                 logger.debug(
                     f"🕑 clk/cam/Δ/adjust=( "
-                    f"{(self._align_timestampset.reference)/1e6:.1f} / "
+                    f"{self._align_timestampset.reference/1e6:.1f} / "
                     f"{self._align_timestampset.camera/1e6:.1f} / "
                     f"{timestamp_delta_ns/1e6:5.1f} / "
                     f"{adjust_amount_us/1e3:5.1f}) ms"
