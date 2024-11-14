@@ -41,6 +41,7 @@ class Picamera2Backend(AbstractCameraBackend):
         self._nominal_framerate: float = None
         self._streaming_output: StreamingOutput = None
         self._hires_data: HiresData = None
+        self._adjust_cycle_counter: int = None
 
         logger.info(f"global_camera_info {Picamera2.global_camera_info()}")
 
@@ -51,6 +52,7 @@ class Picamera2Backend(AbstractCameraBackend):
         # initialize private props
         self._streaming_output: StreamingOutput = StreamingOutput()
         self._hires_data: HiresData = HiresData(frame=None, request_hires_still=Event(), condition=Condition())
+        self._adjust_cycle_counter: int = 0
 
         # https://github.com/raspberrypi/picamera2/issues/576
         if self._picamera2:
@@ -234,19 +236,16 @@ class Picamera2Backend(AbstractCameraBackend):
 
         logger.info(f"recovered, time taken: {round((time.time() - tms)*1.0e3, 0)}ms")
 
-    adjust_cycle_counter = 0
-
     def _backend_align(self):
-        global adjust_cycle_counter
         # in picamera2 backend the current time ref is mapped to the frame captured in prior cycle
         self._current_timestampset.reference -= int((1.0 / self._nominal_framerate) * 1e9)
         timestamp_delta_ns = self._current_timestampset.camera - self._current_timestampset.reference  # in ns
 
-        if adjust_cycle_counter >= ADJUST_EVERY_X_CYCLE:
-            adjust_cycle_counter = 0
+        if self._adjust_cycle_counter >= ADJUST_EVERY_X_CYCLE:
+            self._adjust_cycle_counter = 0
             adjust_amount_us = -timestamp_delta_ns / 1.0e3
         else:
-            adjust_cycle_counter += 1
+            self._adjust_cycle_counter += 1
             adjust_amount_us = 0
 
         with self._picamera2.controls as ctrl:
