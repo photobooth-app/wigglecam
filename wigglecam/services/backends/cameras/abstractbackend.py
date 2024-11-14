@@ -2,7 +2,8 @@ import io
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from threading import Barrier, BrokenBarrierError, Condition, Event
+from queue import Full, Queue
+from threading import Barrier, BrokenBarrierError, Condition, Event, current_thread
 from typing import Literal
 
 from ....utils.stoppablethread import StoppableThread
@@ -43,10 +44,10 @@ class AbstractCameraBackend(ABC):
         self._nominal_framerate: int = None
         self._started_evt: Event = None
         self._camera_thread: StoppableThread = None
-        self._align_thread: StoppableThread = None
+        self._ticker_thread: StoppableThread = None
         self._barrier: Barrier = None
+        self._current_timestamp_reference_in_queue: Queue[int] = None
         self._current_timestampset: TimestampSet = None
-        self._align_timestampset: TimestampSet = None
 
         # init
         self._started_evt = Event()
@@ -54,15 +55,9 @@ class AbstractCameraBackend(ABC):
     def __repr__(self):
         return f"{self.__class__}"
 
-    def get_timestamps_to_align(self) -> TimestampSet:
-        assert self._current_timestampset.reference is not None
-        assert self._current_timestampset.camera is not None
-
-        # shift reference to align with camera cycle
-        _current_timestampset_reference = self._current_timestampset.reference
-        # _current_timestampset_reference -= (1.0 / self._nominal_framerate) * 1e9
-
-        self._align_timestampset = TimestampSet(reference=_current_timestampset_reference, camera=self._current_timestampset.camera)
+    @abstractmethod
+    def _backend_align():
+        pass
 
     @abstractmethod
     def start(self, nominal_framerate: int = None):
@@ -74,15 +69,15 @@ class AbstractCameraBackend(ABC):
 
         # init common abstract props
         self._nominal_framerate = nominal_framerate
-        self._barrier = Barrier(3, action=self.get_timestamps_to_align)
+        self._barrier = Barrier(2, action=self._backend_align)
+        self._current_timestamp_reference_in_queue: Queue[int] = Queue(maxsize=1)
         self._current_timestampset = TimestampSet(None, None)
-        self._align_timestampset = TimestampSet(None, None)
 
         self._camera_thread = StoppableThread(name="_camera_thread", target=self._camera_fun, args=(), daemon=True)
         self._camera_thread.start()
 
-        self._align_thread = StoppableThread(name="_align_thread", target=self._align_fun, args=(), daemon=True)
-        self._align_thread.start()
+        self._ticker_thread = StoppableThread(name="_ticker_thread", target=self._ticker_fun, args=(), daemon=True)
+        self._ticker_thread.start()
 
     @abstractmethod
     def stop(self):
@@ -92,9 +87,9 @@ class AbstractCameraBackend(ABC):
         if self._barrier:
             self._barrier.abort()
 
-        if self._align_thread and self._align_thread.is_alive():
-            self._align_thread.stop()
-            self._align_thread.join()
+        if self._ticker_thread and self._ticker_thread.is_alive():
+            self._ticker_thread.stop()
+            self._ticker_thread.join()
 
         if self._camera_thread and self._camera_thread.is_alive():
             self._camera_thread.stop()
@@ -103,16 +98,17 @@ class AbstractCameraBackend(ABC):
     @abstractmethod
     def camera_alive(self) -> bool:
         camera_alive = self._camera_thread and self._camera_thread.is_alive()
-        align_alive = self._align_thread and self._align_thread.is_alive()
+        ticker_alive = self._ticker_thread and self._ticker_thread.is_alive()
 
-        return camera_alive and align_alive
+        return camera_alive and ticker_alive
 
     def sync_tick(self, timestamp_ns: int):
-        self._current_timestampset.reference = timestamp_ns
+        # use a queue maxlen=1 to decouple the thread calling sync_tick and the consuming thread
         try:
-            self._barrier.wait()
-        except BrokenBarrierError:
-            logger.debug("sync barrier broke")
+            self._current_timestamp_reference_in_queue.put(timestamp_ns, block=True, timeout=0.5 / self._nominal_framerate)
+        except Full:
+            # this happens if the reference and camera are totally out of sync. It should recover from this state or maybe need to remove old timestamp and place new always?
+            print("queue full, could not place updated ref time, skip and continue...")
 
     @abstractmethod
     def start_stream(self):
@@ -148,6 +144,17 @@ class AbstractCameraBackend(ABC):
     def _camera_fun(self):
         pass
 
-    @abstractmethod
-    def _align_fun(self):
-        pass
+    def _ticker_fun(self):
+        # TODO: somewhere else:
+        logger.debug("starting _ticker_fun")
+
+        while not current_thread().stopped():
+            #  - 0.2 * 1e9  # TODO: this one improved continuous capture on pi3! why?
+            self._current_timestampset.reference = self._current_timestamp_reference_in_queue.get(block=True, timeout=1.0)
+
+            try:
+                self._barrier.wait()
+            except BrokenBarrierError:
+                logger.debug("sync barrier broke")
+
+        logger.debug("left _ticker_fun")

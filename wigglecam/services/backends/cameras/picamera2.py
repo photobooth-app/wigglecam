@@ -234,59 +234,39 @@ class Picamera2Backend(AbstractCameraBackend):
 
         logger.info(f"recovered, time taken: {round((time.time() - tms)*1.0e3, 0)}ms")
 
-    def _align_fun(self):
-        logger.debug("starting _align_fun")
-        timestamp_delta_ns = 0
-        adjust_cycle_counter = 0
-        adjust_amount_us = 0
-        # capture_time_assigned_timestamp_ns = None
-        nominal_frame_duration = 1.0 / self._nominal_framerate
+    adjust_cycle_counter = 0
 
-        # wait until all threads are actually started before process anything. mostly relevent for the _fun's defined in abstract
-        self._started_evt.wait(timeout=10)  # we wait very long, it would usually not time out except there is a bug and this unstalls
+    def _backend_align(self):
+        global adjust_cycle_counter
+        # in picamera2 backend the current time ref is mapped to the frame captured in prior cycle
+        self._current_timestampset.reference -= int((1.0 / self._nominal_framerate) * 1e9)
+        timestamp_delta_ns = self._current_timestampset.camera - self._current_timestampset.reference  # in ns
 
-        self.recover()
+        if adjust_cycle_counter >= ADJUST_EVERY_X_CYCLE:
+            adjust_cycle_counter = 0
+            adjust_amount_us = -timestamp_delta_ns / 1.0e3
+        else:
+            adjust_cycle_counter += 1
+            adjust_amount_us = 0
 
-        while not current_thread().stopped():
-            # if self._capture_in_progress:
-            #     adjust_cycle_counter = 0  # keep counter 0 until something is in progress and wait X_CYCLES until adjustment is done afterwards
+        with self._picamera2.controls as ctrl:
+            fixed_frame_duration = int(1.0 / self._nominal_framerate * 1e6 + adjust_amount_us)
+            ctrl.FrameDurationLimits = (fixed_frame_duration,) * 2
 
-            try:
-                self._barrier.wait()
-                # at this point we got an updated self._align_timestampset set in barriers action.
-            except BrokenBarrierError:
-                logger.debug("sync barrier broke")
-                break
-
-            timestamp_delta_ns = self._align_timestampset.camera - self._align_timestampset.reference  # in ns
-
-            if adjust_cycle_counter >= ADJUST_EVERY_X_CYCLE:
-                adjust_cycle_counter = 0
-                adjust_amount_us = -timestamp_delta_ns / 1.0e3
-            else:
-                adjust_cycle_counter += 1
-                adjust_amount_us = 0
-
-            with self._picamera2.controls as ctrl:
-                fixed_frame_duration = int(nominal_frame_duration * 1e6 + adjust_amount_us)
-                ctrl.FrameDurationLimits = (fixed_frame_duration,) * 2
-
-            THRESHOLD_LOG = 0
-            if abs(timestamp_delta_ns / 1.0e6) > THRESHOLD_LOG:
-                # even in debug reduce verbosity a bit if all is fine and within 2ms tolerance
-                logger.debug(
-                    f"🕑 clk/cam/Δ/adjust=( "
-                    f"{self._align_timestampset.reference/1e6:.1f} / "
-                    f"{self._align_timestampset.camera/1e6:.1f} / "
-                    f"{timestamp_delta_ns/1e6:5.1f} / "
-                    f"{adjust_amount_us/1e3:5.1f}) ms"
-                    # f"FrameDuration={round(picam_metadata['FrameDuration']/1e3,1)} ms "
-                )
-            else:
-                pass
-                # silent
-
-        logger.info("_align_fun left")
+        THRESHOLD_LOG = 0
+        if abs(timestamp_delta_ns / 1.0e6) > THRESHOLD_LOG:
+            # even in debug reduce verbosity a bit if all is fine and within 2ms tolerance
+            logger.debug(
+                f"🕑 clk/cam/Δ/adjust=( "
+                f"{self._current_timestampset.reference/1e6:.1f} / "
+                f"{self._current_timestampset.camera/1e6:.1f} / "
+                f"{timestamp_delta_ns/1e6:5.1f} / "
+                f"{adjust_amount_us/1e3:5.1f}) ms"
+                # f"FrameDuration={round(picam_metadata['FrameDuration']/1e3,1)} ms "
+            )
+        else:
+            pass
+            # silent
 
     def _camera_fun(self):
         logger.debug("starting _camera_fun")
