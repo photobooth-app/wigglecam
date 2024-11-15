@@ -121,8 +121,9 @@ class AcquisitionService(BaseService):
             yield (b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + output_jpeg_bytes + b"\r\n\r\n")
 
     def trigger_execute_job(self):
-        # TODO: all this should run only on primary device! it's not validated, the connector needs to ensure to call the right device currently.
-        # maybe config can be changed in future and so also the _tirgger_out_thread is not started on secondary nodes.
+        if not self._config.is_primary:
+            raise RuntimeError("trigger can be sent from primary device only!")
+
         self._flag_trigger_out.set()
 
     def wait_for_trigger_job(self, timeout: float = None):
