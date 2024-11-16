@@ -17,9 +17,6 @@ from .abstractbackend import AbstractCameraBackend, Formats, StreamingOutput
 logger = logging.getLogger(__name__)
 
 
-ADJUST_EVERY_X_CYCLE = 10
-
-
 @dataclasses.dataclass
 class HiresData:
     # dataframe
@@ -236,36 +233,10 @@ class Picamera2Backend(AbstractCameraBackend):
 
         logger.info(f"recovered, time taken: {round((time.time() - tms)*1.0e3, 0)}ms")
 
-    def _backend_align(self):
-        # in picamera2 backend the current time ref is mapped to the frame captured in prior cycle
-        self._current_timestampset.reference += int((1.0 / self._nominal_framerate) * 1e9)
-        timestamp_delta_ns = self._current_timestampset.camera - self._current_timestampset.reference  # in ns
-
-        if self._adjust_cycle_counter >= ADJUST_EVERY_X_CYCLE:
-            self._adjust_cycle_counter = 0
-            adjust_amount_us = -timestamp_delta_ns / 1.0e3
-        else:
-            self._adjust_cycle_counter += 1
-            adjust_amount_us = 0
-
+    def _backend_adjust(self, adjust_amount_ns: int):
         with self._picamera2.controls as ctrl:
-            fixed_frame_duration = int(1.0 / self._nominal_framerate * 1e6 + adjust_amount_us)
+            fixed_frame_duration = int(1.0 / self._nominal_framerate * 1e6 + adjust_amount_ns * 1e-3)
             ctrl.FrameDurationLimits = (fixed_frame_duration,) * 2
-
-        THRESHOLD_LOG = 0
-        if abs(timestamp_delta_ns / 1.0e6) > THRESHOLD_LOG:
-            # even in debug reduce verbosity a bit if all is fine and within 2ms tolerance
-            logger.debug(
-                f"🕑 clk/cam/Δ/adjust=( "
-                f"{self._current_timestampset.reference/1e6:.1f} / "
-                f"{self._current_timestampset.camera/1e6:.1f} / "
-                f"{timestamp_delta_ns/1e6:5.1f} / "
-                f"{adjust_amount_us/1e3:5.1f}) ms"
-                # f"FrameDuration={round(picam_metadata['FrameDuration']/1e3,1)} ms "
-            )
-        else:
-            pass
-            # silent
 
     def _camera_fun(self):
         logger.debug("starting _camera_fun")

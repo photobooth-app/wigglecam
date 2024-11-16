@@ -11,6 +11,8 @@ from ....utils.stoppablethread import StoppableThread
 logger = logging.getLogger(__name__)
 Formats = Literal["jpeg"]  # only jpeg for now
 
+ADJUST_EVERY_X_CYCLE = 10
+
 
 class StreamingOutput(io.BufferedIOBase):
     """Lores data class used for streaming.
@@ -56,8 +58,37 @@ class AbstractCameraBackend(ABC):
         return f"{self.__class__}"
 
     @abstractmethod
-    def _backend_align():
+    def _backend_adjust(self, adjust_amount_ns: int):
         pass
+
+    def _backend_align(self):
+        # in backends the current time ref is mapped to the frame captured in prior cycle
+        self._current_timestampset.reference += int((1.0 / self._nominal_framerate) * 1e9)
+        timestamp_delta_ns = self._current_timestampset.camera - self._current_timestampset.reference  # in ns
+
+        if self._adjust_cycle_counter >= ADJUST_EVERY_X_CYCLE:
+            self._adjust_cycle_counter = 0
+            adjust_amount_ns = -timestamp_delta_ns
+        else:
+            self._adjust_cycle_counter += 1
+            adjust_amount_ns = 0
+
+        self._backend_adjust(adjust_amount_ns)
+
+        THRESHOLD_LOG = 0
+        if abs(timestamp_delta_ns / 1.0e6) > THRESHOLD_LOG:
+            # even in debug reduce verbosity a bit if all is fine and within 2ms tolerance
+            logger.debug(
+                f"🕑 clk/cam/Δ/adjust=( "
+                f"{self._current_timestampset.reference/1e6:.1f} / "
+                f"{self._current_timestampset.camera/1e6:.1f} / "
+                f"{timestamp_delta_ns/1e6:5.1f} / "
+                f"{adjust_amount_ns/1e6:5.1f}) ms"
+                # f"FrameDuration={round(picam_metadata['FrameDuration']/1e3,1)} ms "
+            )
+        else:
+            pass
+            # silent
 
     @abstractmethod
     def start(self, nominal_framerate: int = None):

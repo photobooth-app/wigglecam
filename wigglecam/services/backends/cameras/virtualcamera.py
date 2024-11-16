@@ -2,11 +2,13 @@ import io
 import logging
 import random
 import time
+from queue import Full, Queue
 from threading import BrokenBarrierError, Condition, current_thread
 
 import numpy
 from PIL import Image
 
+from ....utils.stoppablethread import StoppableThread
 from ...config.models import ConfigBackendVirtualCamera
 from .abstractbackend import AbstractCameraBackend, Formats
 
@@ -22,14 +24,20 @@ class VirtualCameraBackend(AbstractCameraBackend):
         # declarations
         self._data_bytes: bytes = None
         self._data_condition: Condition = None
+
         self._offset_x: int = None
         self._offset_y: int = None
-        self._adjust_amount: float = None
+
+        self._producer_thread: StoppableThread = None
+        self._producer_adjust_amount: float = None
+        self._producer_queue: Queue[tuple[bytes, int]] = None
 
         # initializiation
         self._data_bytes: bytes = None
         self._data_condition: Condition = Condition()
-        self._adjust_amount: float = 0
+
+        self._producer_adjust_amount: float = 0
+        self._producer_queue: Queue[tuple[bytes, int]] = Queue(maxsize=1)
 
     def start(self, nominal_framerate: int = None):
         super().start(nominal_framerate=nominal_framerate)
@@ -38,15 +46,21 @@ class VirtualCameraBackend(AbstractCameraBackend):
         self._offset_x = random.randint(5, 20)
         self._offset_y = random.randint(5, 20)
 
+        self._producer_thread = StoppableThread(name="_producer_thread", target=self._producer_fun, args=(), daemon=True)
+        self._producer_thread.start()
+
         logger.info(f"initialized virtual camera with random offset=({self._offset_x},{self._offset_y})")
 
     def stop(self):
         super().stop()
 
+        self._producer_thread.stop()
+
     def camera_alive(self) -> bool:
         super_alive = super().camera_alive()
+        producer_alive = self._producer_thread and self._producer_thread.is_alive()
 
-        return super_alive
+        return super_alive and producer_alive
 
     def start_stream(self):
         pass
@@ -91,6 +105,39 @@ class VirtualCameraBackend(AbstractCameraBackend):
         random_image.save(byte_io, format="JPEG", quality=50)
         return byte_io.getbuffer()
 
+    def _producer_fun(self):
+        logger.debug("starting _producer_fun")
+
+        while not current_thread().stopped():
+            img, exposure_timestamp_ns = self._get_image()
+            try:
+                self._producer_queue.put_nowait((img, exposure_timestamp_ns))
+            except Full:
+                logger.warning("virtual captures buffer full, skipping")
+
+        logger.info("_producer_fun left")
+
+    def _get_image(self) -> tuple[bytes, int]:
+        regular_sleep = 1.0 / self._nominal_framerate
+
+        # simulate exposure
+        start = time.monotonic_ns()
+        img = self._produce_dummy_image()
+
+        # to correct exposure time -> less jittery
+        exposed = time.monotonic_ns()
+        exposure_time = (exposed - start) * 1.0e-9
+        exposure_time_corrected_regular_sleep = regular_sleep - exposure_time
+
+        offset_frame_duration = exposure_time_corrected_regular_sleep + self._producer_adjust_amount
+        # simulate frameduration/fps
+        if offset_frame_duration > 0:
+            time.sleep(offset_frame_duration)
+        else:
+            logger.warning("produce image takes more time than frameduration. cannot deliver frames fast enough. consider lowering the framerate.")
+
+        return img, start
+
     def wait_for_lores_image(self) -> bytes:
         """for other threads to receive a lores JPEG image"""
 
@@ -100,40 +147,20 @@ class VirtualCameraBackend(AbstractCameraBackend):
 
             return self._data_bytes
 
-    def _backend_align(self):
-        # called after barrier is waiting for all as action.
-        # since a thread is calling this, delay in this function lead to constant offset for virtual camera
-        timestamp_delta_ns = self._current_timestampset.camera - self._current_timestampset.reference  # in ns
-
-        self._adjust_amount = -timestamp_delta_ns / 1.0e9
-
-        THRESHOLD_LOG = 0
-        if abs(timestamp_delta_ns / 1.0e6) > THRESHOLD_LOG:
-            # even in debug reduce verbosity a bit if all is fine and within 2ms tolerance
-            logger.debug(
-                f"🕑 clk/cam/Δ/adjust=( "
-                f"{self._current_timestampset.reference/1e6:.1f} / "
-                f"{self._current_timestampset.camera/1e6:.1f} / "
-                f"{timestamp_delta_ns/1e6:5.1f} / "
-                f"{self._adjust_amount*1e3:5.1f}) ms"
-            )
-        else:
-            pass
-            # silent
+    def _backend_adjust(self, adjust_amount_ns: int):
+        self._producer_adjust_amount = adjust_amount_ns * 1.0e-9
 
     def _camera_fun(self):
         logger.debug("starting _camera_fun")
 
         while not current_thread().stopped():
-            regular_sleep = 1.0 / self._nominal_framerate
-            adjust_amount_clamped = max(min(0.5 / self._nominal_framerate, self._adjust_amount), -0.5 / self._nominal_framerate)
+            # adjust_amount_clamped = 0
 
-            time.sleep(regular_sleep + adjust_amount_clamped)
+            img, timestamp_exposure_start = self._producer_queue.get(block=True, timeout=1)
+            self._current_timestampset.camera = timestamp_exposure_start
 
             with self._data_condition:
-                self._current_timestampset.camera = time.monotonic_ns()  # need to set as a backend would do so the align functions work fine
-                # because image is produced in same thread that is responsible for timing, it's jittery but ok for virtual cam
-                self._data_bytes = self._produce_dummy_image()
+                self._data_bytes = img
 
                 self._data_condition.notify_all()
 
