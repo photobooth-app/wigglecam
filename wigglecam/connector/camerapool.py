@@ -3,9 +3,9 @@ from concurrent.futures import Future, ThreadPoolExecutor, wait
 
 from wigglecam.services.jobservice import JobItem, JobRequest
 
-from ..utils.simpledb import SimpleDb
 from .cameranode import CameraNode, NodeStatus
-from .models import CameraPoolJobItem, CameraPoolJobRequest, ConfigCameraPool
+from .dto import CameraPoolJobItem, CameraPoolJobRequest
+from .models import ConfigCameraPool
 
 logger = logging.getLogger(__name__)
 MAX_THREADS = 4
@@ -19,10 +19,9 @@ class CameraPool:
 
         # declare private props
         self._primary_node: CameraNode = None
-        self._db: SimpleDb[CameraPoolJobItem] = None
 
         # initialize priv props
-        self._db: SimpleDb[CameraPoolJobItem] = SimpleDb[CameraPoolJobItem]()
+        pass
 
     def _identify_primary_node(self):
         primary_nodes = [node for node in self._nodes if node.is_primary]
@@ -102,7 +101,7 @@ class CameraPool:
         results = [future.result() for future in futures]
 
         camerapooljobitem = CameraPoolJobItem(request=camerapooljobrequest, node_ids=[result["id"] for result in results])
-        self._db.add_item(camerapooljobitem)  # TODO: decide if to keep track in a db or leave it to the user
+        logger.info(camerapooljobitem)
 
         return camerapooljobitem
 

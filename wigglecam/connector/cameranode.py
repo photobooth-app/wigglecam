@@ -1,23 +1,15 @@
 import logging
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from functools import cached_property
 
 import requests
 
 from wigglecam.services.jobservice import JobRequest
 
+from .dto import NodeStatus
 from .models import ConfigCameraNode
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class NodeStatus:
-    description: str = None
-    can_connect: bool = None
-    is_healthy: bool = None
-    is_primary: bool = None
-    status: str = None
 
 
 class CameraNode:

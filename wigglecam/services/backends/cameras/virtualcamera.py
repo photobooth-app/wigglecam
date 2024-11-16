@@ -6,7 +6,7 @@ from queue import Full, Queue
 from threading import BrokenBarrierError, Condition, current_thread
 
 import numpy
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from ....utils.stoppablethread import StoppableThread
 from ...config.models import ConfigBackendVirtualCamera
@@ -85,8 +85,6 @@ class VirtualCameraBackend(AbstractCameraBackend):
             raise NotImplementedError
 
     def _produce_dummy_image(self) -> bytes:
-        from PIL import ImageDraw
-
         offset_x = self._offset_x
         offset_y = self._offset_y
 
@@ -103,13 +101,17 @@ class VirtualCameraBackend(AbstractCameraBackend):
         random_image.paste(mask, (size // ellipse_divider + offset_x, size // ellipse_divider + offset_y), mask=mask)
 
         random_image.save(byte_io, format="JPEG", quality=50)
-        return byte_io.getbuffer()
+
+        return byte_io.getvalue()
+        # getvalue (actual bytes copy) instead getbuffer (memoryview) to avoid Exception ignored in: <_io.BytesIO object at xxx>
+        # BufferError: Existing exports of data: object cannot be re-sized
 
     def _producer_fun(self):
         logger.debug("starting _producer_fun")
 
         while not current_thread().stopped():
             img, exposure_timestamp_ns = self._get_image()
+
             try:
                 self._producer_queue.put_nowait((img, exposure_timestamp_ns))
             except Full:

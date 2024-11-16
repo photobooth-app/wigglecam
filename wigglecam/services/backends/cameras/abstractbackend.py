@@ -47,12 +47,14 @@ class AbstractCameraBackend(ABC):
         self._started_evt: Event = None
         self._camera_thread: StoppableThread = None
         self._ticker_thread: StoppableThread = None
+        self._adjust_cycle_counter: int = None
         self._barrier: Barrier = None
         self._current_timestamp_reference_in_queue: Queue[int] = None
         self._current_timestampset: TimestampSet = None
 
         # init
         self._started_evt = Event()
+        self._adjust_cycle_counter: int = 0
 
     def __repr__(self):
         return f"{self.__class__}"
@@ -84,7 +86,6 @@ class AbstractCameraBackend(ABC):
                 f"{self._current_timestampset.camera/1e6:.1f} / "
                 f"{timestamp_delta_ns/1e6:5.1f} / "
                 f"{adjust_amount_ns/1e6:5.1f}) ms"
-                # f"FrameDuration={round(picam_metadata['FrameDuration']/1e3,1)} ms "
             )
         else:
             pass

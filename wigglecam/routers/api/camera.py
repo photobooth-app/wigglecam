@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import Response, StreamingResponse
 
 from ...container import container
-from ...services.acquisitionservice import CameraParameters
+from ...services.dto import AcquisitionCameraParameters
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -60,8 +60,9 @@ def still_camera():
         ) from exc
 
 
-@router.get("/configure")
-def configure_camera(parameters: CameraParameters):
+@router.post("/configure")
+def configure_camera(cameraparameters: AcquisitionCameraParameters):
+    print(cameraparameters)
     raise NotImplementedError
 
 

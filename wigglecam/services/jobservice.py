@@ -1,8 +1,6 @@
 import logging
 import os
-import uuid
 from collections import namedtuple
-from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from threading import current_thread
@@ -12,6 +10,7 @@ from ..utils.stoppablethread import StoppableThread
 from .acquisitionservice import AcquisitionService
 from .baseservice import BaseService
 from .config.models import ConfigJobConnected
+from .dto import JobItem, JobRequest
 
 logger = logging.getLogger(__name__)
 
@@ -20,37 +19,6 @@ Captures = namedtuple("Captures", ["seq", "captured_time", "frame"])
 DATA_PATH = Path("./media")
 # as from image source
 PATH_ORIGINAL = DATA_PATH / "original"
-
-
-@dataclass
-class JobRequest:
-    number_captures: int = 1
-    # TODO: maybe captures:list[bool]=[True] # True=capture, False=skip
-
-
-@dataclass
-class JobItem:
-    request: JobRequest
-
-    id: uuid.UUID = field(default_factory=uuid.uuid4)
-    # urls: list[str] = field(default_factory=list)
-    filepaths: list[Path] = field(default_factory=list)
-
-    @property
-    def is_finished(self) -> bool:
-        return self.request.number_captures == len(self.filepaths)  # if more this is also considered as error!
-
-    def asdict(self) -> dict:
-        out = {
-            prop: getattr(self, prop)
-            for prop in dir(self)
-            if (
-                not prop.startswith("_")  # no privates
-                and not callable(getattr(__class__, prop, None))  # no callables
-                and not isinstance(getattr(self, prop), Path)  # no path instances (not json.serializable)
-            )
-        }
-        return out
 
 
 class JobService(BaseService):
@@ -104,8 +72,6 @@ class JobService(BaseService):
         self._current_job = None
 
     def trigger_execute_job(self):
-        # TODO: all this should run only on primary device! it's not validated, the connector needs to ensure to call the right device currently.
-        # maybe config can be changed in future and so also the _tirgger_out_thread is not started on secondary nodes.
         self._acquisition_service.trigger_execute_job()
 
     def _proc_job(self):
@@ -118,7 +84,7 @@ class JobService(BaseService):
             frames.append(
                 Captures(
                     i,
-                    datetime.now().astimezone().strftime("%Y%m%d-%H%M%S-%f"),
+                    datetime.now().astimezone().strftime("%Y%m%d-%H%M%S-%f"),  # TODO: maybe we can in future use the actual time of capture.
                     self._acquisition_service.wait_for_hires_frame(),
                 )
             )

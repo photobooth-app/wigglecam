@@ -1,6 +1,5 @@
 import logging
 import time
-from dataclasses import dataclass
 from importlib import import_module
 from threading import Event, current_thread
 
@@ -11,12 +10,6 @@ from .baseservice import BaseService
 from .config.models import ConfigSyncedAcquisition
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class CameraParameters:
-    iso: int | None = None
-    shutter: int | None = None
 
 
 class AcquisitionService(BaseService):
