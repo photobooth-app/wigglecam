@@ -19,7 +19,7 @@ from .routers.static import static_router
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--host", action="store", type=str, default="0.0.0.0", help="Host the server is bound to (default: %(default)s).")
-parser.add_argument("--port", action="store", type=int, default=8000, help="Port the server listens to (default: %(default)s).")
+parser.add_argument("--port", action="store", type=int, default=8010, help="Port the server listens to (default: %(default)s).")
 
 logger = logging.getLogger(f"{__name__}")
 
