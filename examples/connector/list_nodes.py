@@ -1,3 +1,4 @@
+import logging
 import sys
 
 from wigglecam.connector import CameraNode, CameraPool
@@ -16,4 +17,5 @@ def main(args=None):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.CRITICAL)
     sys.exit(main(args=sys.argv[1:]))  # for testing
