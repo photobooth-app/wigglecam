@@ -1,4 +1,5 @@
 import logging
+from dataclasses import asdict
 from typing import Generic, TypeVar
 
 logger = logging.getLogger(__name__)
@@ -12,23 +13,12 @@ class SimpleDb(Generic[T]):
     jobdb = SimpleDb[JobItem]()
     and it will have linting.
 
-    T needs to have .id and .asdict() functions (like JobItem and Mediaitem, ...):
+    T needs to have .id functions (like JobItem and Mediaitem, ...):
 
     @dataclass
     class Item:
         id: uuid.UUID = field(default_factory=uuid.uuid4)
 
-        def asdict(self) -> dict:
-            out = {
-                prop: getattr(self, prop)
-                for prop in dir(self)
-                if (
-                    not prop.startswith("_")  # no privates
-                    and not callable(getattr(__class__, prop, None))  # no callables
-                    and not isinstance(getattr(self, prop), Path)  # no path instances (not json.serializable)
-                )
-            }
-            return out
 
     """
 
@@ -43,14 +33,15 @@ class SimpleDb(Generic[T]):
         self._db.insert(0, item)  # insert at first position (prepend)
 
     def get_recent_item(self) -> T:
-        return self._db[0]
+        try:
+            return self._db[0]
+        except IndexError as exc:
+            raise FileNotFoundError("database is empty") from exc
 
     def update_item(self, updated_item: T) -> T:
-        for idx, item in enumerate(self._db):
-            if updated_item == item:
-                self._db[idx] = updated_item
-
-        return self._db[idx]
+        # there is no routine, because we pass around the references to elements in db, its updated automatically...
+        # see tests
+        pass
 
     def del_item(self, item: T):
         self._db.remove(item)
@@ -59,7 +50,7 @@ class SimpleDb(Generic[T]):
         self._db.clear()
 
     def get_list_as_dict(self) -> list[T]:
-        return [item.asdict() for item in self._db]
+        return [asdict(item) for item in self._db]
 
     def db_get_list(self) -> list[T]:
         return [item for item in self._db]
@@ -69,11 +60,11 @@ class SimpleDb(Generic[T]):
             raise RuntimeError("id is wrong type")
 
         # https://stackoverflow.com/a/7125547
-        item = next((x for x in self._db if x.id == id), None)
+        item = next((x for x in self._db if str(x.id) == id), None)  # fix: id could be uuid, force str here.
 
         if item is None:
-            logger.error(f"image {id} not found!")
-            raise FileNotFoundError(f"image {id} not found!")
+            logger.error(f"item {id} not found!")
+            raise FileNotFoundError(f"item {id} not found!")
 
         return item
 

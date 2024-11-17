@@ -10,7 +10,7 @@ from ..utils.stoppablethread import StoppableThread
 from .acquisitionservice import AcquisitionService
 from .baseservice import BaseService
 from .config.models import ConfigJobConnected
-from .dto import JobItem, JobRequest
+from .dto import JobItem, JobRequest, MediaItem
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +30,14 @@ class JobService(BaseService):
         self._acquisition_service: AcquisitionService = acquisition_service
 
         # declare private props
-        self._db: SimpleDb[JobItem] = None
+        self._db_jobs: SimpleDb[JobItem] = None
+        self._db_media: SimpleDb[MediaItem] = None
         self._jobprocessor_thread: StoppableThread = None
         self._current_job: JobItem = None
 
         # init
-        self._db: SimpleDb[JobItem] = SimpleDb[JobItem]()
+        self._db_jobs: SimpleDb[JobItem] = SimpleDb[JobItem]()
+        self._db_media: SimpleDb[MediaItem] = SimpleDb[MediaItem]()
 
         # ensure data directories exist
         os.makedirs(f"{PATH_ORIGINAL}", exist_ok=True)
@@ -64,7 +66,7 @@ class JobService(BaseService):
         self._acquisition_service.clear_trigger_job_flag()  # reset, otherwise if it was set, the job is processed immediately
 
         self._current_job = JobItem(request=jobrequest)
-        self._db.add_item(self._current_job)
+        self._db_jobs.add_item(self._current_job)
 
         return self._current_job
 
@@ -102,7 +104,11 @@ class JobService(BaseService):
             with open(filepath, "wb") as f:
                 f.write(self._acquisition_service.encode_frame_to_image(frame.frame, "jpeg"))
 
-            self._current_job.filepaths.append(filepath)
+            mediaitem = MediaItem(filepath=filepath)
+            self._db_media.add_item(mediaitem)
+
+            self._current_job.mediaitem_ids.append(mediaitem.id)
+
             logger.info(f"image saved to {filepath}")
 
     def _jobprocessor_fun(self):
@@ -123,10 +129,11 @@ class JobService(BaseService):
                     self._proc_job()
                 except Exception as exc:
                     logger.error(f"error processing job: {exc}")
+                    self._current_job.status = "finished_fail"
                 else:
-                    # update jobitem:
+                    # update jobitem, it's updated in the db automatically because we have references here
+                    self._current_job.status = "finished_ok"
                     logger.info(self._current_job)
-                    self._db.update_item(self._current_job)
                     logger.info("finished job successfully")
                 finally:
                     self._current_job = None

@@ -1,14 +1,21 @@
 import logging
+import os
+import time
 from concurrent.futures import Future, ThreadPoolExecutor, wait
+from pathlib import Path
 
-from wigglecam.services.jobservice import JobItem, JobRequest
-
+from ..services.dto import Status
+from ..services.jobservice import JobItem, JobRequest
 from .cameranode import CameraNode, NodeStatus
-from .dto import CameraPoolJobItem, CameraPoolJobRequest
+from .dto import ConnectorJobDownloadResult, ConnectorJobRequest, ConnectorJobResult, ConnectorPoolJobStatus, NodeFiles
 from .models import ConfigCameraPool
 
 logger = logging.getLogger(__name__)
 MAX_THREADS = 4
+
+
+def create_basic_folders():
+    os.makedirs("tmp", exist_ok=True)
 
 
 class CameraPool:
@@ -22,6 +29,13 @@ class CameraPool:
 
         # initialize priv props
         pass
+
+        # ensure dirs are avail
+        try:
+            create_basic_folders()
+        except Exception as exc:
+            logger.critical(f"cannot create data folders, error: {exc}")
+            raise RuntimeError(f"cannot create data folders, error: {exc}") from exc
 
     def _identify_primary_node(self):
         primary_nodes = [node for node in self._nodes if node.is_primary]
@@ -72,7 +86,7 @@ class CameraPool:
 
         return healthy
 
-    def _create_nodejobs_from_pooljob(self, camerapooljobrequest: CameraPoolJobRequest) -> list[JobRequest]:
+    def _create_nodejobs_from_pooljob(self, camerapooljobrequest: ConnectorJobRequest) -> list[JobRequest]:
         jobs: list[JobRequest] = []
 
         if camerapooljobrequest.sequential:
@@ -83,7 +97,7 @@ class CameraPool:
 
         return jobs
 
-    def setup_and_trigger_pool(self, camerapooljobrequest: CameraPoolJobRequest) -> CameraPoolJobItem:
+    def setup_and_trigger_pool(self, camerapooljobrequest: ConnectorJobRequest) -> ConnectorJobResult:
         # one time set on first call if not found yet.
         self._check_primary_node()
         # setup
@@ -95,35 +109,81 @@ class CameraPool:
             futures: list[Future[JobItem]] = [executor.submit(node.job_setup, jobrequests[idx]) for idx, node in enumerate(self._nodes)]
             done, _ = wait(futures)
 
-            # send primary request to trigger_out
-            self.trigger_primary()
+        # send primary request to trigger_out
+        self.trigger_pool()
 
         results = [future.result() for future in futures]
 
-        camerapooljobitem = CameraPoolJobItem(request=camerapooljobrequest, node_ids=[result["id"] for result in results])
+        camerapooljobitem = ConnectorJobResult(request=camerapooljobrequest, node_jobids=[result.id for result in results])
         logger.info(camerapooljobitem)
 
         return camerapooljobitem
 
+    def check_job_status_pool(self, camerapooljobitem: ConnectorJobResult) -> ConnectorPoolJobStatus:
+        # request to all nodes to check job status:
+        with ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
+            # submit tasks and collect futures
+            futures: list[Future[Status]] = [
+                executor.submit(node.job_status, camerapooljobitem.node_jobids[idx]) for idx, node in enumerate(self._nodes)
+            ]
+            done, _ = wait(futures)
+
+        status = ConnectorPoolJobStatus(nodes_status=[future.result() for future in futures])
+
+        return status
+
+    def wait_until_all_finished_ok(self, camerapooljobitem: ConnectorJobResult, timeout=10) -> ConnectorPoolJobStatus:
+        start_time = time.monotonic()
+        all_finished_ok = False
+
+        while not all_finished_ok:
+            status = self.check_job_status_pool(camerapooljobitem)
+            all_finished_ok = status.all_finished_ok
+            time.sleep(0.4)
+
+            if time.monotonic() - start_time >= timeout:
+                raise TimeoutError(f"job did not finishe within timeout of {timeout}s")
+
+        logger.info(status)
+        return status
+
+    # TODO: needed externally?
+    def get_jobitems_pool(self, camerapooljobitem: ConnectorJobResult) -> list[JobItem]:
+        # request to all nodes to check job status:
+        with ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
+            # submit tasks and collect futures
+            futures: list[Future[JobItem]] = [
+                executor.submit(node.job_getresults, camerapooljobitem.node_jobids[idx]) for idx, node in enumerate(self._nodes)
+            ]
+            done, _ = wait(futures)
+
+        nodes_jobresults = [future.result() for future in futures]
+
+        logger.info(nodes_jobresults)
+
+        return nodes_jobresults
+
     def trigger_pool(self):
-        # setup
-        pass  # useful only if standalone_mode is enabled on nodes (default).
+        # alias for trigger_primary
+        self._trigger_primary()
 
-        # send primary request to trigger_out
-        self.trigger_primary()
-
-    def trigger_primary(self):
+    def _trigger_primary(self):
         # send primary request to trigger_out
         self._primary_node.trigger()
 
-    def get_job_results(self, job_id):
-        for node in self._nodes:
-            node.receive_result(job_id)
+    def download_all(self, camerapooljobitem: ConnectorJobResult, timeout=10):
+        # check if job finished on node:
+        # TODO: should be done externally before, but maybe here also? we could just wait until finished?
 
-        # return file_list
+        # download finished from all nodes
+        with ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
+            # submit tasks and collect futures
+            futures: list[Future[NodeFiles]] = [
+                executor.submit(node.download_all, camerapooljobitem.node_jobids[idx], Path(str(camerapooljobitem.id), str(idx)))
+                for idx, node in enumerate(self._nodes)
+            ]
+            done, _ = wait(futures)
 
-    def get_job_data(self, job_id):
-        for node in self._nodes:
-            node.receive_result(job_id)
+        nodesfiles = [future.result() for future in futures]
 
-        # return images
+        return ConnectorJobDownloadResult(request=camerapooljobitem.request, id=camerapooljobitem.id, node_mediaitems=nodesfiles)
