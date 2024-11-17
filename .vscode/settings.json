@@ -6,5 +6,8 @@
   },
   "python.testing.pytestArgs": ["--basetemp=./tests_tmp/", "./tests"],
   "python.testing.unittestEnabled": false,
-  "python.testing.pytestEnabled": true
+  "python.testing.pytestEnabled": true,
+  "[html]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  }
 }
