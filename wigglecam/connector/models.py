@@ -11,7 +11,7 @@ class ConfigCameraNode(BaseModel):
         description="Not used in the app, you can use it to identify the node.",
     )
     base_url: HttpUrl = Field(
-        default="http://127.0.0.1:8000",
+        default="http://127.0.0.1:8010",
         description="Base URL (including port) the node can be accessed by. Based on your setup, usually IP is preferred over hostname.",
     )
 

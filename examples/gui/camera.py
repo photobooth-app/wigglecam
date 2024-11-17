@@ -14,7 +14,7 @@ from wigglecam.__version__ import __version__
 
 basedir = os.path.dirname(__file__)
 parser = argparse.ArgumentParser()
-parser.add_argument("--base_url", action="store", default="http://127.0.0.1:8000", help="Base URL to connect to (default: %(default)s).")
+parser.add_argument("--base_url", action="store", default="http://127.0.0.1:8010", help="Base URL to connect to (default: %(default)s).")
 
 session = requests.Session()
 

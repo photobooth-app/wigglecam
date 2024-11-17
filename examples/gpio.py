@@ -7,7 +7,7 @@ from gpiozero import BadPinFactory, Button
 
 # Device.pin_factory = MockFactory()
 parser = argparse.ArgumentParser()
-parser.add_argument("--base_url", action="store", default="http://127.0.0.1:8000", help="Base URL to connect to (default: %(default)s).")
+parser.add_argument("--base_url", action="store", default="http://127.0.0.1:8010", help="Base URL to connect to (default: %(default)s).")
 parser.add_argument("--shutter_pin", action="store", default="GPIO4", help="GPIO the shutter button is connected to (default: %(default)s).")
 
 

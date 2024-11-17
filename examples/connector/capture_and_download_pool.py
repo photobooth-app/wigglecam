@@ -7,8 +7,8 @@ from wigglecam.connector.dto import ConnectorJobRequest
 from wigglecam.connector.models import ConfigCameraNode, ConfigCameraPool
 
 nodes: list[CameraNode] = []
-nodes.append(CameraNode(config=ConfigCameraNode(description="cam1", base_url="http://127.0.0.1:8000/")))
-# nodes.append(CameraNode(config=ConfigCameraNode(description="cam2", base_url="http://127.0.0.1:8000/")))
+nodes.append(CameraNode(config=ConfigCameraNode(description="cam1", base_url="http://127.0.0.1:8010/")))
+# nodes.append(CameraNode(config=ConfigCameraNode(description="cam2", base_url="http://127.0.0.1:8011/")))
 
 
 camera_pool = CameraPool(ConfigCameraPool(), nodes=nodes)
