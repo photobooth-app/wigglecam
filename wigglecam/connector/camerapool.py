@@ -70,9 +70,9 @@ class CameraPool:
             print(
                 f"{idx:<3}"
                 f"{node_status.description.ljust(20)}"
-                f"{"✅    " if node_status.can_connect else "❌    "}"
-                f"{"✅      " if node_status.is_primary else "❌      "}"
-                f"{"✅      " if node_status.is_healthy else "❌      "}"
+                f"{'✅    ' if node_status.can_connect else '❌    '}"
+                f"{'✅      ' if node_status.is_primary else '❌      '}"
+                f"{'✅      ' if node_status.is_healthy else '❌      '}"
                 f"{node_status.status}"
             )
 
