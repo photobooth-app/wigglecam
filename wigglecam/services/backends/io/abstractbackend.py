@@ -1,6 +1,9 @@
+import logging
 import time
 from abc import ABC, abstractmethod
 from threading import Condition, Event
+
+logger = logging.getLogger(__name__)
 
 
 class AbstractIoBackend(ABC):
@@ -16,13 +19,19 @@ class AbstractIoBackend(ABC):
         self._clock_rise_in_condition: Condition = Condition()
         self._clock_fall_in_condition: Condition = Condition()
         self._trigger_in_flag: Event = Event()
+        self._is_primary: bool = False
 
     def __repr__(self):
         return f"{self.__class__}"
 
     @abstractmethod
-    def start(self, is_primary: bool = None):
-        pass
+    def start(self, is_primary: bool):
+        self._is_primary = is_primary
+
+        if self._is_primary is True:
+            logger.info("node marked as primary, when triggered, this node will send multicast trigger")
+        else:
+            logger.info("node marked as NOT primary")
 
     @abstractmethod
     def stop(self):

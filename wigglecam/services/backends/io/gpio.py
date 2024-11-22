@@ -28,12 +28,10 @@ class GpioBackend(AbstractIoBackend):
         self._queue_trigger_out: Queue[bool] = None
 
         # init private props
-        self._is_primary: bool = False
+        pass
 
     def start(self, is_primary: bool = None):
-        super().start()
-
-        self._is_primary = is_primary
+        super().start(is_primary)
 
         if self._is_primary is True:
             logger.info("loading primary clockwork service")
