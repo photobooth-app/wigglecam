@@ -1,4 +1,5 @@
 import logging
+import select
 import socket
 import struct
 import time
@@ -81,6 +82,14 @@ class VirtualIoBackend(AbstractIoBackend):
         logger.info("_gpio_fun left")
 
     def _trigger_fun(self):
+        def recv_timeout(sock: socket.socket, bytes_to_read: int, timeout_seconds: float = 1.0):
+            sock.setblocking(0)
+            ready = select.select([sock], [], [], timeout_seconds)
+            if ready[0]:
+                return sock.recv(bytes_to_read)
+
+            raise TimeoutError()
+
         logger.debug("starting _trigger_fun to trigger when multicast message is received")
 
         # Multicast receiver, reference https://gist.github.com/dksmiffs/96ddbfd11ad7349ab4889b2e79dc2b22
@@ -92,7 +101,11 @@ class VirtualIoBackend(AbstractIoBackend):
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
 
         while not current_thread().stopped():
-            msg = sock.recv(1024)
+            try:
+                msg = recv_timeout(sock, 1024)
+            except TimeoutError:
+                # to allow trigger_fun to finish regular, use timeout
+                continue
 
             if msg == b"triggerON":
                 self._on_trigger_in()
