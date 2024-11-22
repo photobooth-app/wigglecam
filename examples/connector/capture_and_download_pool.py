@@ -1,6 +1,5 @@
 import logging
 import sys
-import traceback
 
 from wigglecam.connector import CameraNode, CameraPool
 from wigglecam.connector.dto import ConnectorJobRequest
@@ -16,6 +15,7 @@ camera_pool = CameraPool(ConfigCameraPool(), nodes=nodes)
 
 def main(args=None):
     camerapooljobrequest = ConnectorJobRequest(number_captures=10)
+    print(camerapooljobrequest)
 
     try:
         connectorjobitem = camera_pool.setup_and_trigger_pool(camerapooljobrequest=camerapooljobrequest)
@@ -28,10 +28,9 @@ def main(args=None):
         print(downloadresult)
         print(f"this is from node[0], first item: {downloadresult.node_mediaitems[0].mediaitems[0].filepath}")
 
-    except Exception as exc:
-        traceback.print_exc()
-        print(f"Error processing: {exc}")
-        print(camera_pool.print_nodes_status())
+    except Exception:
+        print("Error processing:")
+        print(camera_pool.get_nodes_status_formatted())
     else:
         print("Job successful")
 

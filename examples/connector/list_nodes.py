@@ -13,7 +13,7 @@ camera_pool = CameraPool(ConfigCameraPool(), nodes=nodes)
 
 def main(args=None):
     print(f"Registered {len(camera_pool._nodes)} nodes:")
-    camera_pool.print_nodes_status()
+    print(camera_pool.get_nodes_status_formatted())
 
 
 if __name__ == "__main__":

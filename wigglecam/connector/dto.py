@@ -24,6 +24,9 @@ class ConnectorJobRequest:
     sequential: bool = False  # sync or sequential each tick next node?
     number_captures: int = 1
 
+    def __str__(self):
+        return f"connector job requesting {self.number_captures} captures from nodes"
+
 
 @dataclass
 class ConnectorJobResult:

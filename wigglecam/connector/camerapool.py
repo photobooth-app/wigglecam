@@ -19,7 +19,7 @@ def create_basic_folders():
 
 
 class CameraPool:
-    def __init__(self, config: ConfigCameraPool, nodes: list[CameraNode]):
+    def __init__(self, config, nodes: list[CameraNode]):
         # init the arguments
         self._config: ConfigCameraPool = config
         self._nodes: list[CameraNode] = nodes
@@ -35,25 +35,27 @@ class CameraPool:
             create_basic_folders()
         except Exception as exc:
             logger.critical(f"cannot create data folders, error: {exc}")
-            raise RuntimeError(f"cannot create data folders, error: {exc}") from exc
+            raise PermissionError(f"cannot create data folders, error: {exc}") from exc
 
     def _identify_primary_node(self):
-        primary_nodes = [node for node in self._nodes if node.is_primary]
+        primary_nodes = [node for node in self._nodes if node.is_primary]  # can raise errors if connection issues...
 
-        if len(primary_nodes) != 1:
-            raise RuntimeError(f"found {len(primary_nodes)} primary node but need exactly 1. Please check configuration.")
+        if len(primary_nodes) > 1:
+            # we do not raise an error because for testing it's convienient for now to just continue.
+            # also later in real life users might just configure the first node as primary and it's working fine.
+            logger.warning(f"found {len(primary_nodes)} primary node but need exactly 1.")
+            logger.warning(
+                f"The first node '{primary_nodes[0].config.description}' is used as primary_node - this might be wrong! Please check configuration!"
+            )
+
+        if len(primary_nodes) == 0:
+            raise RuntimeError("no primary node found!")
 
         return primary_nodes[0]
 
-    def _identify_and_set_primary_node(self):
-        try:
-            self._primary_node = self._identify_primary_node()
-        except Exception as exc:
-            raise exc
-
     def _check_primary_node(self):
         if not self._primary_node:
-            self._identify_and_set_primary_node()
+            self._primary_node = self._identify_primary_node()
 
     def get_nodes_status(self) -> list[NodeStatus]:
         nodestatusext = []
@@ -62,22 +64,27 @@ class CameraPool:
 
         return nodestatusext
 
-    def print_nodes_status(self):
+    def get_nodes_status_formatted(self):
         nodes_status = self.get_nodes_status()
 
-        print("#".ljust(3) + "Description".ljust(20) + "Conn.".ljust(6) + "Primary".ljust(8) + "Healthy".ljust(8) + "Status")
+        out = "#".ljust(3) + "Description".ljust(20) + "Conn.".ljust(6) + "Primary".ljust(8) + "Healthy".ljust(8) + "Status"
+        out += "\n"
         for idx, node_status in enumerate(nodes_status):
-            print(
+            out += (
                 f"{idx:<3}"
                 f"{node_status.description.ljust(20)}"
                 f"{'✅    ' if node_status.can_connect else '❌    '}"
                 f"{'✅      ' if node_status.is_primary else '❌      '}"
                 f"{'✅      ' if node_status.is_healthy else '❌      '}"
                 f"{node_status.status}"
+                "\n"
             )
 
         if (sum(1 for node_status in nodes_status if node_status.is_primary)) != 1:
-            print("⚡ There needs to be 1 primary node, found more or less! ⚡")
+            out += "⚡ There needs to be 1 primary node, found more or less! ⚡"
+            out += "\n"
+
+        return out
 
     def is_healthy(self):
         healthy = True
@@ -142,9 +149,10 @@ class CameraPool:
             time.sleep(0.4)
 
             if time.monotonic() - start_time >= timeout:
-                raise TimeoutError(f"job did not finishe within timeout of {timeout}s")
+                raise TimeoutError(f"job did not finish within timeout of {timeout}s")
 
         logger.info(status)
+
         return status
 
     # TODO: needed externally?
