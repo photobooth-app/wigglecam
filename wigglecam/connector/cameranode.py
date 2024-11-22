@@ -33,8 +33,6 @@ class CameraNode:
     def __del__(self):
         self._session.close()
 
-        logger.debug(f"{self.__module__} stopped")
-
     def __str__(self):
         return f"{self._config.description} at {self._config.base_url}"
 
@@ -88,7 +86,7 @@ class CameraNode:
     # connection endpoints
     #
     def camera_still(self):
-        return self._request("camera/still").content()
+        return self._request("camera/still").content
 
     def job_setup(self, jobrequest: JobRequest) -> JobItem:
         return JobItem(**self._request("job/setup", asdict(jobrequest)).json())
