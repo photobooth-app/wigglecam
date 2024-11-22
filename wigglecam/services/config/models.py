@@ -44,7 +44,7 @@ class ConfigBackendPicamera2(BaseModel):
 class GroupCameraBackend(BaseModel):
     active_backend: Literal["VirtualCamera", "Picamera2"] = Field(
         title="Active Backend",
-        default="Picamera2",
+        default="VirtualCamera",
         description="Backend to capture images from.",
     )
 
@@ -55,7 +55,7 @@ class GroupCameraBackend(BaseModel):
 class GroupIoBackend(BaseModel):
     active_backend: Literal["VirtualIo", "Gpio"] = Field(
         title="Active Backend",
-        default="Gpio",
+        default="VirtualIo",
         description="Backend to use synchronize camera to.",
     )
 
