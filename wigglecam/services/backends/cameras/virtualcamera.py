@@ -54,7 +54,9 @@ class VirtualCameraBackend(AbstractCameraBackend):
     def stop(self):
         super().stop()
 
-        self._producer_thread.stop()
+        if self._producer_thread and self._producer_thread.is_alive():
+            self._producer_thread.stop()
+            self._producer_thread.join()
 
     def camera_alive(self) -> bool:
         super_alive = super().camera_alive()
