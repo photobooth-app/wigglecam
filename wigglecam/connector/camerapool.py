@@ -190,7 +190,7 @@ class CameraPool:
                 executor.submit(node.download_all, camerapooljobitem.node_jobids[idx], Path(str(camerapooljobitem.id), str(idx)))
                 for idx, node in enumerate(self._nodes)
             ]
-            done, _ = wait(futures)
+            done, _ = wait(futures, timeout=timeout)
 
         nodesfiles = [future.result() for future in futures]
 
