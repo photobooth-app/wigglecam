@@ -92,13 +92,15 @@ The primary node has a display attached and is responsible to generate the clock
 Edit `~/.env.primary` and place following for the reference 3d printed wigglecam:
 
 ```sh
-# enable clock generator on primary:
+# enable clock generator and trigger forwarding on primary:
 acquisition__is_primary="True"
 # io config:
+acquisition__io_backends__active_backend="Gpio" # default "VirtualIo"
 acquisition__io_backends__gpio__fps_nominal=5
 acquisition__io_backends__gpio__pwmchip="pwmchip0" # or pwmchip2 for Pi5
 acquisition__io_backends__gpio__pwm_channel=0 # or 2 for Pi5
 # cam config:
+acquisition__camera_backends__active_backend="Picamera2"    # default "VirtualCamera"
 acquisition__camera_backends__picamera2__enable_preview_display="True"
 ```
 

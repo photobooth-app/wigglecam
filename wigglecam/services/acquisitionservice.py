@@ -183,13 +183,21 @@ class AcquisitionService(BaseService):
 
     def _supervisor_fun(self):
         logger.info("device supervisor started, checking for clock, then starting device")
+        flag_stopped_orphaned_already = False
 
         while not current_thread().stopped():
             if not self._device_alive():
+                if not flag_stopped_orphaned_already:
+                    # to ensure after device was not alive (means just 1 thread stopped), we stop all threads
+                    self._device_stop()
+                    flag_stopped_orphaned_already = True
+
                 if not self._clock_impulse_detected(timeout=2.0):
                     # loop restart until we got an impulse from master
                     time.sleep(1)
                     continue
+
+                flag_stopped_orphaned_already = False
 
                 logger.info("got clock impulse, continue starting...")
 
@@ -227,6 +235,7 @@ class AcquisitionService(BaseService):
             except TimeoutError:
                 # stop devices when no clock is avail, supervisor enables again after clock is received, derives new framerate ans starts backends
                 logger.warning("clock signal missing.")
+                self._device_stop()  # if device was started once, stop here all before waiting for restart...
                 break
             else:
                 self._camera_backend.sync_tick(timestamp_ns)
