@@ -134,14 +134,14 @@ class CameraNode:
 
         return NodeFiles(job_id, mediaitems=mediaitems)
 
-    def _request(self, request_api, data: dict | list = None, timeout=(1, 5)) -> Response:
+    def _request(self, request_api, data: dict | list = None, timeout=(2, 7)) -> Response:
         try:
             if data is not None:
                 # stupid documentation: json takes dict/list! not json encoded string
-                r = self._session.post(f"{self._config.base_url}/api/{request_api}", json=data, timeout=(1, 5))
+                r = self._session.post(f"{self._config.base_url}/api/{request_api}", json=data, timeout=timeout)
             else:
                 # https://requests.readthedocs.io/en/stable/user/advanced/#timeouts
-                r = self._session.get(f"{self._config.base_url}/api/{request_api}", timeout=(1, 5))
+                r = self._session.get(f"{self._config.base_url}/api/{request_api}", timeout=timeout)
 
             r.raise_for_status()
         except HTTPError as exc:
