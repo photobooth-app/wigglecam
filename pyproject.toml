@@ -56,6 +56,7 @@ documentation = "https://github.com/mgineer85/photobooth-wigglecam"
 [project.scripts]
 wigglecam-mobile = "examples.lowlevel.gpio:main"
 wigglecam-gui = "examples.gui.camera:main"
+wigglecam-virtual = "examples.lowlevel.multiserver:main"
 wigglecam-node = "wigglecam.__main__:main"
 
 [tool.pdm]
@@ -63,12 +64,12 @@ version = { source = "file", path = "wigglecam/__version__.py" }
 
 [tool.pdm.dev-dependencies]
 test = [
-  "pytest>=7.4.0",
-  "pytest-benchmark>=4.0.0",
-  "pytest-cov>=4.1.0",
-  "coverage[toml]>=7.4.0",
-  "numpy>=2.0.0",
-  "simplejpeg>=1.7.4", # might be installed globally already on Pi but in older version incompatible to numpy2. used internally by picamera2
+  "pytest",
+  "pytest-benchmark",
+  "pytest-cov",
+  "coverage[toml]",
+  "numpy",
+  "simplejpeg", # might be installed globally already on Pi but in older version incompatible to numpy2. used internally by picamera2
 ]
 lint = [
   "ruff"
