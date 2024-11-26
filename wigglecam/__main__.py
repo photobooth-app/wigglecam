@@ -71,7 +71,7 @@ def _create_app() -> FastAPI:
 app = _create_app()
 
 
-def main(args=None, run: bool = True):
+def main(args=None):
     args = parser.parse_args(args)  # parse here, not above because pytest system exit 2
 
     host = args.host
@@ -101,8 +101,7 @@ def main(args=None, run: bool = True):
     server.force_exit = True  # leads to many exceptions on shutdown, but ... it is what it is...
 
     # run
-    if run:  # for pytest
-        server.run()
+    server.run()
 
 
 if __name__ == "__main__":
