@@ -2,7 +2,7 @@ import io
 import logging
 import random
 import time
-from queue import Full, Queue
+from queue import Empty, Full, Queue
 from threading import BrokenBarrierError, Condition, current_thread
 
 import numpy
@@ -160,7 +160,12 @@ class VirtualCameraBackend(AbstractCameraBackend):
         while not current_thread().stopped():
             # adjust_amount_clamped = 0
 
-            img, timestamp_exposure_start = self._producer_queue.get(block=True, timeout=1)
+            try:
+                img, timestamp_exposure_start = self._producer_queue.get(block=True, timeout=1)
+            except Empty:
+                # if producer did not yet produce something, because thread started delayed, we just continue
+                continue
+
             self._current_timestampset.camera = timestamp_exposure_start
 
             with self._data_condition:
