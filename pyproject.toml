@@ -40,7 +40,9 @@ dependencies = [
     "fastapi",
     "uvicorn",
     "gpiod>=2.2.1; platform_system == 'Linux'",
-    "opencv-python-headless",
+    "opencv-python",
+    # "opencv-python-headless",
+    "matplotlib>=3.9.3",
 ]
 
 [project.optional-dependencies]
