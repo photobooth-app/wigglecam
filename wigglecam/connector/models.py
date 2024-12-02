@@ -18,3 +18,7 @@ class ConfigCameraNode(BaseModel):
 
 class ConfigCameraPool(BaseModel):
     keep_node_copy: bool = False
+
+
+class ConfigCalibrator(BaseModel):
+    pass
