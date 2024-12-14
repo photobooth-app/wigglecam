@@ -25,8 +25,10 @@ class VirtualCameraBackend(AbstractCameraBackend):
         self._data_bytes: bytes = None
         self._data_condition: Condition = None
 
+        # some variability for producer to create images
         self._offset_x: int = None
         self._offset_y: int = None
+        self._color_current: int = 0
 
         self._producer_thread: StoppableThread = None
         self._producer_adjust_amount: float = None
@@ -92,14 +94,22 @@ class VirtualCameraBackend(AbstractCameraBackend):
 
         size = 250
         ellipse_divider = 3
+        color_steps = 100
         byte_io = io.BytesIO()
 
         mask = Image.new("L", (size, size), 0)
         draw = ImageDraw.Draw(mask)
         draw.ellipse((0, 0) + (size // ellipse_divider, size // ellipse_divider), fill=255)
 
-        imarray = numpy.random.rand(size, size, 3) * 255
-        random_image = Image.fromarray(imarray.astype("uint8"), "RGB")
+        time_normalized = self._color_current / color_steps
+        self._color_current = self._color_current + 1 if self._color_current < color_steps else 0
+        imarray = numpy.empty((size, size, 3))
+        imarray[:, :, 0] = 0.5 + 0.5 * numpy.sin(2 * numpy.pi * (0 / 3 + time_normalized))
+        imarray[:, :, 1] = 0.5 + 0.5 * numpy.sin(2 * numpy.pi * (1 / 3 + time_normalized))
+        imarray[:, :, 2] = 0.5 + 0.5 * numpy.sin(2 * numpy.pi * (2 / 3 + time_normalized))
+        imarray = numpy.round(255 * imarray).astype(numpy.uint8)
+        random_image = Image.fromarray(imarray, "RGB")
+
         random_image.paste(mask, (size // ellipse_divider + offset_x, size // ellipse_divider + offset_y), mask=mask)
 
         random_image.save(byte_io, format="JPEG", quality=50)
