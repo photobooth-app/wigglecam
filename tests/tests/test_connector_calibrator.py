@@ -84,7 +84,7 @@ def test_save_load_intrinsicdata(tmp_path):
 
 
 def test_save_load_extrinsicdata(tmp_path):
-    test_data = CalibrationDataExtrinsics(1.0, np.zeros((np.prod((2, 2))), np.float32), 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, "date")
+    test_data = CalibrationDataExtrinsics(1.0, np.zeros((np.prod((2, 2))), np.float32), 3, 4, 5, 6, 7, 8, 9, 10, 11, "date")
     test_data.save(tmp_path / "test.pickle")
 
     loaded_data = CalibrationDataExtrinsics.from_file(tmp_path / "test.pickle")
