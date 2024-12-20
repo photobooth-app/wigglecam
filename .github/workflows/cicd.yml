@@ -1,0 +1,40 @@
+name: Publish 🐍 📦 to PyPI and TestPyPI
+
+#on: [push]
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "**"
+  label:
+    types:
+      - created
+      - edited
+
+jobs:
+  pypi-publish:
+    name: Upload release to PyPI
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'photobooth-app' && github.triggering_actor != 'dependabot[bot]' }}
+    environment:
+      name: pypi
+      url: https://pypi.org/p/wigglecam
+    permissions:
+      id-token: write # IMPORTANT: this permission is mandatory for trusted publishing
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pdm-project/setup-pdm@v4
+
+      - name: Build packages
+        run: pdm build
+
+      # - name: Publish distribution 📦 to Test PyPI
+      #   run: pdm publish --no-build --repository https://test.pypi.org/legacy/ --skip-existing
+
+      - name: Publish distribution 📦 to PyPI
+        if: startsWith(github.ref, 'refs/tags')
+        run: pdm publish --no-build
+
+      
