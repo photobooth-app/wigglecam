@@ -4,6 +4,7 @@ import argparse
 import logging
 import sys
 from contextlib import asynccontextmanager
+from importlib.metadata import version
 from pathlib import Path
 
 import uvicorn
@@ -12,7 +13,6 @@ from fastapi.exception_handlers import http_exception_handler, request_validatio
 from fastapi.exceptions import HTTPException, RequestValidationError
 from fastapi.staticfiles import StaticFiles
 
-from .__version__ import __version__
 from .container import container
 from .routers import api
 from .routers.static import static_router
@@ -39,7 +39,7 @@ def _create_app() -> FastAPI:
     _app = FastAPI(
         title="Wigglecam Node API",
         description="API may change any time.",
-        version=__version__,
+        version=version("wigglecam"),
         contact={"name": "mgineer85", "url": "https://github.com/photobooth-app/wigglecam", "email": "me@mgineer85.de"},
         docs_url="/api/doc",
         redoc_url=None,

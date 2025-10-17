@@ -2,10 +2,10 @@
 [project]
 name = "wigglecam"
 description = "Wigglecam package help you building an awesome camera."
+version = "0.0.2"
 authors = [{ name = "Michael G", email = "me@mgineer85.de" }]
 maintainers = [{ name = "Michael G", email = "me@mgineer85.de" }]
-requires-python = ">=3.10,<3.14"
-dynamic = ["version"]
+requires-python = ">=3.10"
 readme = "README.md"
 license = { text = "MIT" }
 classifiers = [
@@ -16,6 +16,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Multimedia :: Graphics",
   "Topic :: Software Development :: Libraries :: Python Modules",
   "Topic :: Multimedia :: Graphics :: Capture :: Digital Camera",
@@ -32,25 +33,23 @@ keywords = [
 ]
 
 dependencies = [
-    "pydantic",
-    "pydantic-settings",
-    "gpiozero",
-    "pillow>=10.0.0",
-    "requests",
-    "fastapi",
-    "uvicorn",
-    "gpiod>=2.2.1; platform_system == 'Linux'",
-    "pyturbojpeg>=1.7.0",
-    # "opencv-python",
-    "opencv-contrib-python",
-    # "opencv-contrib-python-headless",
-    "matplotlib>=3.9.3",
+  "pydantic",
+  "pydantic-settings",
+  "gpiozero",
+  "pillow>=10.0.0",
+  "requests",
+  "fastapi",
+  "uvicorn",
+  "gpiod>=2.2.1; platform_system == 'Linux'",
+  "pyturbojpeg>=1.8.0",
+  # "opencv-python",
+  "opencv-contrib-python",
+  # "opencv-contrib-python-headless",
+  "matplotlib>=3.9.3",
 ]
 
 [project.optional-dependencies]
-gui = [
-    "pyside6>=6.8.0.2",
-]
+gui = ["pyside6>=6.8.0.2"]
 
 [project.urls]
 homepage = "https://photobooth-app.org/wigglegramcamera/"
@@ -63,25 +62,42 @@ wigglecam-gui = "examples.gui.camera:main"
 wigglecam-virtual = "examples.lowlevel.multiserver:main"
 wigglecam-node = "wigglecam.__main__:main"
 
-[tool.pdm]
-version = { source = "file", path = "wigglecam/__version__.py" }
-
-[tool.pdm.dev-dependencies]
-test = [
+[dependency-groups]
+dev = [
+  "ruff",
   "pytest",
   "pytest-benchmark",
+  "pytest-benchmark[histogram]>=5.1.0",
   "pytest-cov",
   "coverage[toml]",
   "numpy",
-  "simplejpeg", # might be installed globally already on Pi but in older version incompatible to numpy2. used internally by picamera2
-]
-lint = [
-  "ruff"
+  "simplejpeg",                         # might be installed globally already on Pi but in older version incompatible to numpy2. used internally by picamera2
+  "pyright",
+  "poethepoet",
 ]
 
-[tool.pdm.scripts]
-test = "pytest --basetemp=./tests_tmp/ -v ./tests/tests --cov-report=term --cov-report=xml:coverage.xml --cov"
-benchmark = "pytest --basetemp=./tests_tmp/ -v ./tests/benchmarks"
+
+# uv does not yet support [tool.pdm.scripts], so we skip this for now... https://github.com/astral-sh/uv/issues/5903
+[tool.poe.tasks]
+lint = [
+  { cmd = "uv run pyright" },
+  { cmd = "uv run ruff check" },
+  { cmd = "uv run ruff format --check" },
+]
+format = [{ cmd = "uv run ruff check --fix" }, { cmd = "uv run ruff format" }]
+test = [
+  { cmd = "pytest --basetemp=./tests_tmp/ -v ./src/tests/tests --cov-report=term --cov-report=xml:coverage.xml --cov --durations=10" },
+]
+benchmark = [
+  { cmd = "pytest --benchmark-only --benchmark-autosave --basetemp=./tests_tmp/ -v ./src/tests/benchmarks" },
+]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+ignore = ["./experimental/", "./vendor/"]
+typeCheckingMode = "standard"
+
 
 [tool.ruff]
 line-length = 150
@@ -118,11 +134,10 @@ omit = ["test_*.py", "./tests/*"]
 parallel = true
 concurrency = ["thread", "multiprocessing"]
 
+
 [build-system]
-requires = ["pdm-backend"]
-build-backend = "pdm.backend"
+requires = ["uv_build>=0.8.3,<0.10.0"]
+build-backend = "uv_build"
 
-
-[tool.pdm.build]
-includes = ["./wigglecam","./examples"]
-
+[tool.uv.build-backend]
+module-name = ["wigglecam", "examples"]

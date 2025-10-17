@@ -1,10 +1,12 @@
 import logging
 from dataclasses import asdict
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
+
+from ..services.dto import JobItem
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
+T = TypeVar("T", bound=JobItem)
 
 
 class SimpleDb(Generic[T]):
@@ -38,7 +40,7 @@ class SimpleDb(Generic[T]):
         except IndexError as exc:
             raise FileNotFoundError("database is empty") from exc
 
-    def update_item(self, updated_item: T) -> T:
+    def update_item(self, updated_item: T):
         # there is no routine, because we pass around the references to elements in db, its updated automatically...
         # see tests
         pass
@@ -49,7 +51,7 @@ class SimpleDb(Generic[T]):
     def clear(self):
         self._db.clear()
 
-    def get_list_as_dict(self) -> list[T]:
+    def get_list_as_dict(self) -> list[dict[str, Any]]:
         return [asdict(item) for item in self._db]
 
     def db_get_list(self) -> list[T]:

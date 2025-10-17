@@ -4,10 +4,7 @@
   "[python]": {
     "editor.defaultFormatter": "charliermarsh.ruff"
   },
-  "python.testing.pytestArgs": ["--basetemp=./tests_tmp/", "./tests"],
+  "python.testing.pytestArgs": ["--basetemp=./tests_tmp/", "./src/tests/"],
   "python.testing.unittestEnabled": false,
-  "python.testing.pytestEnabled": true,
-  "[html]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  }
+  "python.testing.pytestEnabled": true
 }
