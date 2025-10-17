@@ -111,7 +111,7 @@ class AcquisitionService(BaseService):
                 self._camera_backend.stop_stream()
                 raise RuntimeError(f"Stream error {exc}") from exc
 
-            yield (b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + output_jpeg_bytes + b"\r\n\r\n")
+            yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + output_jpeg_bytes + b"\r\n\r\n")
 
     def trigger_execute_job(self):
         if not self._config.is_primary:
