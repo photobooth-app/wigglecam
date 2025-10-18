@@ -4,6 +4,7 @@ import random
 import time
 from queue import Empty, Full, Queue
 from threading import BrokenBarrierError, Condition, current_thread
+from typing import cast
 
 import numpy
 from PIL import Image, ImageDraw
@@ -21,27 +22,21 @@ class VirtualCameraBackend(AbstractCameraBackend):
         # init with arguments
         self._config = config
 
-        # declarations
-        self._data_bytes: bytes = None
-        self._data_condition: Condition = None
-
         # some variability for producer to create images
-        self._offset_x: int = None
-        self._offset_y: int = None
+        self._offset_x: int = 0
+        self._offset_y: int = 0
         self._color_current: int = 0
 
-        self._producer_thread: StoppableThread = None
-        self._producer_adjust_amount: float = None
-        self._producer_queue: Queue[tuple[bytes, int]] = None
+        self._producer_thread: StoppableThread | None = None
 
         # initializiation
-        self._data_bytes: bytes = None
+        self._data_bytes: bytes | None = None
         self._data_condition: Condition = Condition()
 
         self._producer_adjust_amount: float = 0
         self._producer_queue: Queue[tuple[bytes, int]] = Queue(maxsize=1)
 
-    def start(self, nominal_framerate: int = None):
+    def start(self, nominal_framerate: int):
         super().start(nominal_framerate=nominal_framerate)
 
         # on every start place the circle slightly different to the center. could be used for feature detection and align algo testing
@@ -62,7 +57,7 @@ class VirtualCameraBackend(AbstractCameraBackend):
 
     def camera_alive(self) -> bool:
         super_alive = super().camera_alive()
-        producer_alive = self._producer_thread and self._producer_thread.is_alive()
+        producer_alive = bool(self._producer_thread) and self._producer_thread.is_alive()
 
         return super_alive and producer_alive
 
@@ -121,7 +116,7 @@ class VirtualCameraBackend(AbstractCameraBackend):
     def _producer_fun(self):
         logger.debug("starting _producer_fun")
 
-        while not current_thread().stopped():
+        while not cast(StoppableThread, current_thread()).stopped():
             img, exposure_timestamp_ns = self._get_image()
 
             try:
@@ -159,6 +154,8 @@ class VirtualCameraBackend(AbstractCameraBackend):
             if not self._data_condition.wait(timeout=1.0):
                 raise TimeoutError("timeout receiving frames")
 
+            assert self._data_bytes
+
             return self._data_bytes
 
     def _backend_adjust(self, adjust_amount_ns: int):
@@ -167,7 +164,7 @@ class VirtualCameraBackend(AbstractCameraBackend):
     def _camera_fun(self):
         logger.debug("starting _camera_fun")
 
-        while not current_thread().stopped():
+        while not cast(StoppableThread, current_thread()).stopped():
             # adjust_amount_clamped = 0
 
             try:

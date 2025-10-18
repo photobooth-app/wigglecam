@@ -8,8 +8,13 @@ from .backends.cameras.dto import BackendCameraCapture
 Status = Literal["pending", "finished_ok", "finished_fail"]
 
 
+# @dataclass
+class IdItem:
+    id: uuid.UUID
+
+
 @dataclass
-class MediaItem:
+class MediaItem(IdItem):
     filepath: Path
     id: uuid.UUID = field(default_factory=uuid.uuid4)
 
@@ -21,10 +26,11 @@ class JobRequest:
 
 
 @dataclass
-class JobItem:
+class JobItem(IdItem):
     request: JobRequest
 
     id: uuid.UUID = field(default_factory=uuid.uuid4)
+
     mediaitem_ids: list[uuid.UUID] = field(default_factory=list)
 
     status: Status = "pending"

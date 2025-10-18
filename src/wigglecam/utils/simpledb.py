@@ -2,11 +2,11 @@ import logging
 from dataclasses import asdict
 from typing import Any, Generic, TypeVar
 
-from ..services.dto import JobItem
+from ..services.dto import IdItem
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T", bound=JobItem)
+T = TypeVar("T", bound=IdItem)
 
 
 class SimpleDb(Generic[T]):

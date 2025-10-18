@@ -8,18 +8,11 @@ logger = logging.getLogger(__name__)
 
 class AbstractIoBackend(ABC):
     def __init__(self):
-        # abstract properties
-        self._clock_rise_in_condition: Condition = None
-        self._clock_fall_in_condition: Condition = None
-        self._trigger_in_flag: Event = None
-        self._clock_in_timestamp_ns = None
-        self._is_primary: bool = None
-
-        # abstract common properties init
+        self._clock_in_timestamp_ns: int | None = None
+        self._is_primary: bool = False
         self._clock_rise_in_condition: Condition = Condition()
         self._clock_fall_in_condition: Condition = Condition()
         self._trigger_in_flag: Event = Event()
-        self._is_primary: bool = False
 
     def __repr__(self):
         return f"{self.__class__}"
@@ -68,6 +61,7 @@ class AbstractIoBackend(ABC):
         with self._clock_rise_in_condition:
             if not self._clock_rise_in_condition.wait(timeout=timeout):
                 raise TimeoutError("timeout receiving clock signal")
+            assert self._clock_in_timestamp_ns
 
             return self._clock_in_timestamp_ns
 

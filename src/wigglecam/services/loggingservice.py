@@ -114,7 +114,6 @@ class LoggingService(BaseService):
             lgr.handlers = [
                 logging.root.handlers[0],  # this is the streamhandler if not in pytest.
                 self.file_handler,
-                self.eventstream_handler,
             ]
 
     @staticmethod
@@ -133,5 +132,5 @@ class LoggingService(BaseService):
         # report the failure
         logging.getLogger(name="__main__").exception(
             f"Uncaught exception in thread {args.thread}: {args.exc_type} {args.exc_value}",
-            exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
+            exc_info=(args.exc_type, BaseException(args.exc_value), args.exc_traceback),
         )

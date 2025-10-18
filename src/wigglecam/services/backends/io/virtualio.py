@@ -4,6 +4,7 @@ import socket
 import struct
 import time
 from threading import current_thread
+from typing import cast
 
 from ....utils.stoppablethread import StoppableThread
 from ...config.models import ConfigBackendVirtualIo
@@ -23,9 +24,9 @@ class VirtualIoBackend(AbstractIoBackend):
         self._config: ConfigBackendVirtualIo = config
 
         # declare
-        self._server_socket_primary: socket = None
-        self._gpio_thread: StoppableThread = None
-        self._trigger_thread: StoppableThread = None
+        self._server_socket_primary: socket.socket | None = None
+        self._gpio_thread: StoppableThread | None = None
+        self._trigger_thread: StoppableThread | None = None
 
         # private init
         pass
@@ -73,7 +74,7 @@ class VirtualIoBackend(AbstractIoBackend):
         logger.debug("starting _gpio_fun simulating clock")
         logger.info("virtual clock is very basic and suffers from high jitter")
 
-        while not current_thread().stopped():
+        while not cast(StoppableThread, current_thread()).stopped():
             time.sleep((1.0 / self._config.fps_nominal) / 2.0)
             self._on_clock_rise_in(time.monotonic_ns())
             time.sleep((1.0 / self._config.fps_nominal) / 2.0)
@@ -83,7 +84,7 @@ class VirtualIoBackend(AbstractIoBackend):
 
     def _trigger_fun(self):
         def recv_timeout(sock: socket.socket, bytes_to_read: int, timeout_seconds: float = 1.0):
-            sock.setblocking(0)
+            sock.setblocking(False)
             ready = select.select([sock], [], [], timeout_seconds)
             if ready[0]:
                 return sock.recv(bytes_to_read)
@@ -100,7 +101,7 @@ class VirtualIoBackend(AbstractIoBackend):
         mreq = struct.pack("4sl", socket.inet_aton(MCAST_GRP), socket.INADDR_ANY)
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
 
-        while not current_thread().stopped():
+        while not cast(StoppableThread, current_thread()).stopped():
             try:
                 msg = recv_timeout(sock, 1024)
             except TimeoutError:

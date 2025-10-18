@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from queue import Empty, Full, Queue
 from threading import Barrier, BrokenBarrierError, Condition, Event, current_thread
-from typing import Literal
+from typing import Literal, cast
 
 from ....utils.stoppablethread import StoppableThread
 
@@ -82,17 +82,17 @@ class AbstractCameraBackend(ABC):
             # even in debug reduce verbosity a bit if all is fine and within 2ms tolerance
             logger.debug(
                 f"🕑 clk/cam/Δ/adjust=( "
-                f"{self._current_timestampset.reference/1e6:.1f} / "
-                f"{self._current_timestampset.camera/1e6:.1f} / "
-                f"{timestamp_delta_ns/1e6:5.1f} / "
-                f"{adjust_amount_ns/1e6:5.1f}) ms"
+                f"{self._current_timestampset.reference / 1e6:.1f} / "
+                f"{self._current_timestampset.camera / 1e6:.1f} / "
+                f"{timestamp_delta_ns / 1e6:5.1f} / "
+                f"{adjust_amount_ns / 1e6:5.1f}) ms"
             )
         else:
             pass
             # silent
 
     @abstractmethod
-    def start(self, nominal_framerate: int = None):
+    def start(self, nominal_framerate: int):
         logger.debug(f"{self.__module__} start called")
 
         if not nominal_framerate:
@@ -156,7 +156,7 @@ class AbstractCameraBackend(ABC):
         pass
 
     @abstractmethod
-    def wait_for_hires_frame(self):
+    def wait_for_hires_frame(self) -> bytes:
         pass
 
     @abstractmethod
@@ -180,7 +180,7 @@ class AbstractCameraBackend(ABC):
     def _ticker_fun(self):
         logger.debug("starting _ticker_fun")
 
-        while not current_thread().stopped():
+        while not cast(StoppableThread, current_thread()).stopped():
             try:
                 self._current_timestampset.reference = self._current_timestamp_reference_in_queue.get(block=True, timeout=1.0)
             except Empty:

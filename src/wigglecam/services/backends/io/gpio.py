@@ -4,6 +4,7 @@ import time
 from pathlib import Path
 from queue import Empty, Queue
 from threading import current_thread
+from typing import cast
 
 import gpiod
 from gpiod.line import Bias, Clock, Direction, Edge, Value
@@ -23,14 +24,14 @@ class GpioBackend(AbstractIoBackend):
         self._config: ConfigBackendGpio = config
 
         # private props
-        self._gpio_monitor_thread: StoppableThread = None
-        self._gpio_triggerout_thread: StoppableThread = None
-        self._queue_trigger_out: Queue[bool] = None
+        self._gpio_monitor_thread: StoppableThread | None = None
+        self._gpio_triggerout_thread: StoppableThread | None = None
+        self._queue_trigger_out: Queue[bool] | None = None
 
         # init private props
         pass
 
-    def start(self, is_primary: bool = None):
+    def start(self, is_primary: bool = False):
         super().start(is_primary)
 
         if self._is_primary is True:
@@ -38,7 +39,7 @@ class GpioBackend(AbstractIoBackend):
             self._set_hardware_clock(enable=True)
             logger.info("generating clock using hardware pwm overlay")
 
-            self._queue_trigger_out: Queue[bool] = Queue()
+            self._queue_trigger_out = Queue()
             self._gpio_triggerout_thread = StoppableThread(name="_gpio_triggerout_thread", target=self._gpio_triggerout_fun, args=(), daemon=True)
             self._gpio_triggerout_thread.start()
             logger.info(f"forward trigger_out on {self._config.trigger_out_pin_name}")
@@ -153,7 +154,8 @@ class GpioBackend(AbstractIoBackend):
             consumer="trigger_out",
             config={_gpiod_trigger_out: gpiod.LineSettings(direction=Direction.OUTPUT, output_value=Value.INACTIVE)},
         ) as request:
-            while not current_thread().stopped():
+            while not cast(StoppableThread, current_thread()).stopped():
+                assert self._queue_trigger_out
                 # timeout to allow the thread to end after 1s if stopped and no events received (read_edge_events would block infinite otherwise)
                 try:
                     value = self._queue_trigger_out.get(block=True, timeout=1.0)
@@ -210,7 +212,7 @@ class GpioBackend(AbstractIoBackend):
                 )
             },
         ) as request:
-            while not current_thread().stopped():
+            while not cast(StoppableThread, current_thread()).stopped():
                 # timeout to allow the thread to end after 1s if stopped and no events received (read_edge_events would block infinite otherwise)
                 if request.wait_edge_events(timeout=1.0):
                     for event in request.read_edge_events():

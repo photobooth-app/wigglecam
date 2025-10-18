@@ -3,14 +3,16 @@ import io
 import logging
 import time
 from threading import BrokenBarrierError, Condition, Event, current_thread
+from typing import cast
 
 import cv2
-from libcamera import Transform, controls
-from picamera2 import Picamera2, Preview
-from picamera2.encoders import MJPEGEncoder, Quality
-from picamera2.outputs import FileOutput
+from libcamera import Transform, controls  # type: ignore
+from picamera2 import Picamera2, Preview  # type: ignore
+from picamera2.encoders import MJPEGEncoder, Quality  # type: ignore
+from picamera2.outputs import FileOutput  # type: ignore
 from PIL import Image
 
+from ....utils.stoppablethread import StoppableThread
 from ...config.models import ConfigBackendPicamera2
 from .abstractbackend import AbstractCameraBackend, Formats, StreamingOutput
 
@@ -19,12 +21,12 @@ logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class HiresData:
-    # dataframe
-    frame: object = None
     # signal to producer that requesting thread is ready to be notified
-    request_hires_still: Event = None
+    request_hires_still: Event
     # condition when frame is avail
-    condition: Condition = None
+    condition: Condition
+    # dataframe
+    frame: bytes | None
 
 
 class Picamera2Backend(AbstractCameraBackend):
@@ -34,21 +36,20 @@ class Picamera2Backend(AbstractCameraBackend):
         self._config: ConfigBackendPicamera2 = config
 
         # private props
-        self._picamera2: Picamera2 = None
-        self._nominal_framerate: float = None
-        self._streaming_output: StreamingOutput = None
-        self._hires_data: HiresData = None
-        self._adjust_cycle_counter: int = None
+        self._picamera2: Picamera2 | None = None
+        self._streaming_output: StreamingOutput | None = None
+        self._hires_data: HiresData | None = None
+        self._adjust_cycle_counter: int = 0
 
         logger.info(f"global_camera_info {Picamera2.global_camera_info()}")
 
-    def start(self, nominal_framerate: int = None):
+    def start(self, nominal_framerate: int):
         """To start the backend, configure picamera2"""
         super().start(nominal_framerate=nominal_framerate)
 
         # initialize private props
-        self._streaming_output: StreamingOutput = StreamingOutput()
-        self._hires_data: HiresData = HiresData(frame=None, request_hires_still=Event(), condition=Condition())
+        self._streaming_output = StreamingOutput()
+        self._hires_data = HiresData(frame=None, request_hires_still=Event(), condition=Condition())
         self._adjust_cycle_counter: int = 0
 
         # https://github.com/raspberrypi/picamera2/issues/576
@@ -56,7 +57,8 @@ class Picamera2Backend(AbstractCameraBackend):
             self._picamera2.close()
             del self._picamera2
 
-        self._picamera2: Picamera2 = Picamera2(camera_num=self._config.camera_num)
+        self._picamera2 = Picamera2(camera_num=self._config.camera_num)
+        assert self._picamera2
 
         # configure; camera needs to be stopped before
         append_optmemory_format = {}
@@ -127,6 +129,7 @@ class Picamera2Backend(AbstractCameraBackend):
         return super_alive and True
 
     def start_stream(self):
+        assert self._picamera2
         self._picamera2.stop_recording()
         encoder = MJPEGEncoder()
         # encoder.frame_skip_count = 2  # every nth frame to save cpu/bandwith on
@@ -138,18 +141,22 @@ class Picamera2Backend(AbstractCameraBackend):
         logger.info("encoding stream started")
 
     def stop_stream(self):
+        assert self._picamera2
         self._picamera2.stop_recording()
         logger.info("encoding stream stopped")
 
     def wait_for_lores_image(self):
+        assert self._streaming_output
         """for other threads to receive a lores JPEG image"""
         with self._streaming_output.condition:
             if not self._streaming_output.condition.wait(timeout=2.0):
                 raise TimeoutError("timeout receiving frames")
 
+            assert self._streaming_output.frame
             return self._streaming_output.frame
 
     def wait_for_hires_frame(self):
+        assert self._hires_data
         with self._hires_data.condition:
             self._hires_data.request_hires_still.set()
 
@@ -157,6 +164,7 @@ class Picamera2Backend(AbstractCameraBackend):
                 raise TimeoutError("timeout receiving frames")
 
             # self._hires_data.request_hires_still.clear()
+            assert self._hires_data.frame
             return self._hires_data.frame
 
     def done_hires_frames(self):
@@ -166,6 +174,7 @@ class Picamera2Backend(AbstractCameraBackend):
         return super().wait_for_hires_image(format=format)
 
     def encode_frame_to_image(self, frame, format: Formats) -> bytes:
+        assert self._picamera2
         # for picamera2 frame is a picamera2 buffer so conversion needed. can be RGB or YUV420 depending on memory opt
         if format == "jpeg":
             tms = time.time()
@@ -184,14 +193,15 @@ class Picamera2Backend(AbstractCameraBackend):
             image.save(bytes_io, format="jpeg", quality=self._config.original_still_quality)
             out = bytes_io.getbuffer()
 
-            logger.info(f"jpg encode finished, time taken: {round((time.time() - tms)*1.0e3, 0)}ms")
+            logger.info(f"jpg encode finished, time taken: {round((time.time() - tms) * 1.0e3, 0)}ms")
             return out
 
         else:
             raise NotImplementedError
 
     def _check_framerate(self):
-        assert self._nominal_framerate is not None
+        assert self._picamera2
+        # assert self._nominal_framerate
 
         framedurationlimits = self._picamera2.camera_controls["FrameDurationLimits"][:2]  # limits is in µs (min,max)
         fpslimits = tuple([round(1.0 / (val * 1.0e-6), 1) for val in framedurationlimits])  # converted to frames per second fps
@@ -207,6 +217,7 @@ class Picamera2Backend(AbstractCameraBackend):
             logger.warning("nominal framerate is close to cameras capabilities, this might have effect on sync performance!")
 
     def _init_autofocus(self):
+        assert self._picamera2
         """
         on start set autofocus to continuous if requested by config or
         auto and trigger regularly
@@ -225,26 +236,30 @@ class Picamera2Backend(AbstractCameraBackend):
         logger.debug("autofocus set")
 
     def recover(self):
+        assert self._picamera2
         tms = time.time()
         try:
             self._picamera2.drop_frames(2)
         except Exception:
             pass
 
-        logger.info(f"recovered, time taken: {round((time.time() - tms)*1.0e3, 0)}ms")
+        logger.info(f"recovered, time taken: {round((time.time() - tms) * 1.0e3, 0)}ms")
 
     def _backend_adjust(self, adjust_amount_ns: int):
+        assert self._picamera2
         with self._picamera2.controls as ctrl:
             fixed_frame_duration = int(1.0 / self._nominal_framerate * 1e6 + adjust_amount_ns * 1e-3)
             ctrl.FrameDurationLimits = (fixed_frame_duration,) * 2
 
     def _camera_fun(self):
+        assert self._picamera2
+        assert self._hires_data
         logger.debug("starting _camera_fun")
 
         # wait until all threads are actually started before process anything. mostly relevent for the _fun's defined in abstract
         self._started_evt.wait(timeout=10)  # we wait very long, it would usually not time out except there is a bug and this unstalls
 
-        while not current_thread().stopped():
+        while not cast(StoppableThread, current_thread()).stopped():
             if self._hires_data.request_hires_still.is_set():
                 # only capture one pic and return, overlying classes are responsible to ask again if needed fast enough
                 # self._hires_data.request_hires_still.clear()

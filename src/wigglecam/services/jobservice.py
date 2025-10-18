@@ -4,6 +4,7 @@ from collections import namedtuple
 from datetime import datetime
 from pathlib import Path
 from threading import current_thread
+from typing import cast
 
 from ..utils.simpledb import SimpleDb
 from ..utils.stoppablethread import StoppableThread
@@ -30,10 +31,8 @@ class JobService(BaseService):
         self._acquisition_service: AcquisitionService = acquisition_service
 
         # declare private props
-        self._db_jobs: SimpleDb[JobItem] = None
-        self._db_media: SimpleDb[MediaItem] = None
-        self._jobprocessor_thread: StoppableThread = None
-        self._current_job: JobItem = None
+        self._jobprocessor_thread: StoppableThread | None = None
+        self._current_job: JobItem | None = None
 
         # init
         self._db_jobs: SimpleDb[JobItem] = SimpleDb[JobItem]()
@@ -77,6 +76,7 @@ class JobService(BaseService):
         self._acquisition_service.trigger_execute_job()
 
     def _proc_job(self):
+        assert self._current_job
         # warning: use jobservice only without standalone mode! this and the other thread would try to get the event at the same time.
 
         # step 1:
@@ -90,7 +90,7 @@ class JobService(BaseService):
                     self._acquisition_service.wait_for_hires_frame(),
                 )
             )
-            logger.info(f"got {i+1}/{self._current_job.request.number_captures} frames")
+            logger.info(f"got {i + 1}/{self._current_job.request.number_captures} frames")
         self._acquisition_service.done_hires_frames()
         assert len(frames) == self._current_job.request.number_captures
 
@@ -114,7 +114,7 @@ class JobService(BaseService):
     def _jobprocessor_fun(self):
         logger.info("_jobprocessor_fun started")
 
-        while not current_thread().stopped():
+        while not cast(StoppableThread, current_thread()).stopped():
             if self._acquisition_service.wait_for_trigger_job(timeout=1):
                 if self._current_job:
                     logger.info("processing job set up prior")
@@ -124,6 +124,8 @@ class JobService(BaseService):
                 else:
                     logger.error("you have to setup the job first or enable standalone_mode!")
                     continue
+
+                assert self._current_job
 
                 try:
                     self._proc_job()

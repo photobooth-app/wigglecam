@@ -2,6 +2,7 @@ import logging
 import time
 from importlib import import_module
 from threading import Event, current_thread
+from typing import cast
 
 from ..utils.stoppablethread import StoppableThread
 from .backends.cameras.abstractbackend import AbstractCameraBackend, Formats
@@ -119,7 +120,7 @@ class AcquisitionService(BaseService):
 
         self._flag_trigger_out.set()
 
-    def wait_for_trigger_job(self, timeout: float = None):
+    def wait_for_trigger_job(self, timeout: float = 1.0):
         val = self._gpio_backend._trigger_in_flag.wait(timeout)
         if val:
             # if true, directly clear, because we trigger only once!
@@ -167,7 +168,7 @@ class AcquisitionService(BaseService):
 
         return camera_alive and trigger_out_alive and sync_alive
 
-    def _clock_impulse_detected(self, timeout: float = None):
+    def _clock_impulse_detected(self, timeout: float = 2.0):
         try:
             if self._gpio_backend.wait_for_clock_rise_signal(timeout=timeout):
                 logger.info("clock signal received, continue...")
@@ -185,7 +186,7 @@ class AcquisitionService(BaseService):
         logger.info("device supervisor started, checking for clock, then starting device")
         flag_stopped_orphaned_already = False
 
-        while not current_thread().stopped():
+        while not cast(StoppableThread, current_thread()).stopped():
             if not self._device_alive():
                 if not flag_stopped_orphaned_already:
                     # to ensure after device was not alive (means just 1 thread stopped), we stop all threads
@@ -211,6 +212,8 @@ class AcquisitionService(BaseService):
 
                     self._device_stop()
 
+                    continue
+
                 try:
                     self._device_start(derived_fps)
                 except Exception as exc:
@@ -229,7 +232,7 @@ class AcquisitionService(BaseService):
         logger.info("left _supervisor_fun")
 
     def _sync_fun(self):
-        while not current_thread().stopped():
+        while not cast(StoppableThread, current_thread()).stopped():
             try:
                 timestamp_ns = self._gpio_backend.wait_for_clock_rise_signal(timeout=1)
             except TimeoutError:
@@ -243,7 +246,7 @@ class AcquisitionService(BaseService):
         logger.info("left _sync_fun")  # if left, it allows supervisor to restart if needed.
 
     def _trigger_out_fun(self):
-        while not current_thread().stopped():
+        while not cast(StoppableThread, current_thread()).stopped():
             # wait until execute job is requested
             if self._flag_trigger_out.wait(timeout=1):
                 # first clear to avoid endless loops
