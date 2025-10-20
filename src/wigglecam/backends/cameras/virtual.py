@@ -21,12 +21,7 @@ class Virtual(CameraBackend):
         self._color_current = 0
         self._task = None
 
-    async def start(self):
-        """Start the background frame generator."""
-        if self._task is None:
-            self._task = asyncio.create_task(self._device_fun())
-
-    async def _device_fun(self):
+    async def run(self):
         while True:
             # Offload CPU‑bound work to a thread
             produced_frame = await asyncio.to_thread(self._produce_dummy_image)

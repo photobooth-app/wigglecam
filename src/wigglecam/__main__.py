@@ -4,10 +4,14 @@ import argparse
 import asyncio
 import importlib
 import logging
-from typing import Literal
 
 from .app import CameraApp
 from .backends.base import CameraBackend, TriggerBackend
+
+# --- CONSTANTS, maybe later args? -----
+
+SERVER_IP = "0.0.0.0"
+
 
 # --- Registry ------------------------
 
@@ -18,10 +22,16 @@ TRIGGER_CLASSES = ["Pynng"]
 # --- Backend Factory ---------------------------------------------------
 
 
-def backend_factory(backend: Literal["triggers", "cameras"], class_name: str) -> TriggerBackend | CameraBackend:
-    module_path = f".backends.{backend}.{class_name.lower()}"
+def camera_factory(class_name: str) -> CameraBackend:
+    module_path = f".backends.cameras.{class_name.lower()}"
     module = importlib.import_module(module_path, __package__)
     return getattr(module, class_name)()
+
+
+def trigger_factory(class_name: str) -> TriggerBackend:
+    module_path = f".backends.triggers.{class_name.lower()}"
+    module = importlib.import_module(module_path, __package__)
+    return getattr(module, class_name)(SERVER_IP)
 
 
 def resolve_class_name(cli_value: str, registry: list[str]) -> str:
@@ -51,10 +61,10 @@ def parse_args():
         help="Trigger backend to use",
     )
     parser.add_argument(
-        "--index",
+        "--id",
         type=int,
         default=0,
-        help="Camera index",
+        help="Device ID",
     )
 
     return parser.parse_args()
@@ -71,12 +81,10 @@ def main():
     camera_class = resolve_class_name(args.camera, CAMERA_CLASSES)
     trigger_class = resolve_class_name(args.trigger, TRIGGER_CLASSES)
 
-    camera = backend_factory("cameras", camera_class)
-    trigger = backend_factory("triggers", trigger_class)
-    assert isinstance(camera, CameraBackend)
-    assert isinstance(trigger, TriggerBackend)
+    camera = camera_factory(camera_class)
+    trigger = trigger_factory(trigger_class)
 
-    app = CameraApp(camera, trigger, camera_index=args.index)
+    app = CameraApp(camera, trigger, device_id=args.id, server=SERVER_IP)
     asyncio.run(app.run())
 
 

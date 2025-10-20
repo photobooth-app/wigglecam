@@ -49,8 +49,9 @@ dependencies = [
   "pynng",
 ]
 
-[project.optional-dependencies]
-gui = ["pyside6>=6.8.0.2"]
+# [project.optional-dependencies]
+# gui = ["pyside6>=6.8.0.2"]
+
 
 [project.urls]
 homepage = "https://photobooth-app.org/wigglegramcamera/"
@@ -58,9 +59,7 @@ repository = "https://github.com/photobooth-app/wigglecam"
 documentation = "https://photobooth-app.org/wigglegramcamera/"
 
 [project.scripts]
-# wigglecam-mobile = "examples.lowlevel.gpio:main"
-# wigglecam-gui = "examples.gui.camera:main"
-# wigglecam-virtual = "examples.lowlevel.multiserver:main"
+wigglecam-demohub = "examples.demohub:run_async"
 wigglecam-node = "wigglecam.__main__:main"
 
 [dependency-groups]
@@ -141,4 +140,4 @@ requires = ["uv_build>=0.8.3,<0.10.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
-module-name = ["wigglecam"]
+module-name = ["wigglecam", "examples"]
