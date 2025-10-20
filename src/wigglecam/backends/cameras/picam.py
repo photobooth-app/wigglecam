@@ -1,7 +1,8 @@
+# type: ignore
 import io
 import logging
 import time
-from threading import Condition, Event, current_thread
+from threading import current_thread
 from typing import cast
 
 import cv2
@@ -27,7 +28,7 @@ class Picam(CameraBackend):
         # private props
         self._picamera2: Picamera2 | None = None
         self._streaming_output: StreamingOutput | None = None
-        self._hires_data: HiresData | None = None
+        # self._hires_data: HiresData | None = None
         self._adjust_cycle_counter: int = 0
 
         logger.info(f"global_camera_info {Picamera2.global_camera_info()}")
@@ -38,7 +39,7 @@ class Picam(CameraBackend):
 
         # initialize private props
         self._streaming_output = StreamingOutput()
-        self._hires_data = HiresData(frame=None, request_hires_still=Event(), condition=Condition())
+        # self._hires_data = HiresData(frame=None, request_hires_still=Event(), condition=Condition())
         self._adjust_cycle_counter: int = 0
 
         # https://github.com/raspberrypi/picamera2/issues/576
@@ -154,36 +155,35 @@ class Picam(CameraBackend):
             return self._hires_data.frame
 
     def done_hires_frames(self):
+        assert self._hires_data
         self._hires_data.request_hires_still.clear()
 
-    def wait_for_hires_image(self, format: ImageFormats) -> bytes:
-        return super().wait_for_hires_image(format=format)
+    def wait_for_hires_image(self) -> bytes:
+        return super().wait_for_hires_image()
 
-    def encode_frame_to_image(self, frame, format: ImageFormats) -> bytes:
+    def encode_frame_to_image(self, frame) -> bytes:
         assert self._picamera2
         # for picamera2 frame is a picamera2 buffer so conversion needed. can be RGB or YUV420 depending on memory opt
-        if format == "jpeg":
-            tms = time.time()
-            bytes_io = io.BytesIO()
 
-            if self._config.optimize_memoryconsumption:
-                logger.info("enabled memory optimization so frame is in YUV420 and converted to RGB now")
-                # need to convert from YUV420 to RGB before processing jpg because PIL accepts only RGB
-                # currently this is the only place cv2 is used, maybe there is another way to save cv2 from being used on nodes.
-                array = self._picamera2.helpers.make_array(frame, self._picamera2.camera_config["main"])
-                array = cv2.cvtColor(array, cv2.COLOR_YUV420p2BGR)  # yes, this is correct ^^
-                image = Image.fromarray(array, "RGB")
-            else:
-                image = self._picamera2.helpers.make_image(frame, self._picamera2.camera_config["main"])
+        tms = time.time()
+        bytes_io = io.BytesIO()
 
-            image.save(bytes_io, format="jpeg", quality=self._config.original_still_quality)
-            out = bytes_io.getbuffer()
-
-            logger.info(f"jpg encode finished, time taken: {round((time.time() - tms) * 1.0e3, 0)}ms")
-            return out
-
+        if self._config.optimize_memoryconsumption:
+            logger.info("enabled memory optimization so frame is in YUV420 and converted to RGB now")
+            # need to convert from YUV420 to RGB before processing jpg because PIL accepts only RGB
+            # currently this is the only place cv2 is used, maybe there is another way to save cv2 from being used on nodes.
+            array = self._picamera2.helpers.make_array(frame, self._picamera2.camera_config["main"])
+            array = cv2.cvtColor(array, cv2.COLOR_YUV420p2BGR)  # yes, this is correct ^^
+            image = Image.fromarray(array, "RGB")
         else:
-            raise NotImplementedError
+            image = self._picamera2.helpers.make_image(frame, self._picamera2.camera_config["main"])
+
+        image.save(bytes_io, format="jpeg", quality=self._config.original_still_quality)
+        out = bytes_io.getbuffer()
+
+        logger.info(f"jpg encode finished, time taken: {round((time.time() - tms) * 1.0e3, 0)}ms")
+
+        return out
 
     def _init_autofocus(self):
         assert self._picamera2
@@ -217,7 +217,7 @@ class Picam(CameraBackend):
                 # capture hq picture
                 with self._picamera2.captured_request(wait=1.5) as request:
                     self._hires_data.frame = request.make_buffer("main")
-                    picam_metadata = request.get_metadata()
+                    _ = request.get_metadata()
 
                 logger.info("got buffer from cam to send to waiting threads")
 
@@ -226,7 +226,7 @@ class Picam(CameraBackend):
             else:
                 # capture metadata blocks until new metadata is avail
                 try:
-                    picam_metadata = self._picamera2.capture_metadata(wait=2.0)
+                    _ = self._picamera2.capture_metadata(wait=2.0)
 
                 except TimeoutError as exc:
                     logger.warning(f"camera timed out: {exc}")
