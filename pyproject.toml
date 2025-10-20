@@ -35,17 +35,18 @@ keywords = [
 dependencies = [
   "pydantic",
   "pydantic-settings",
-  "gpiozero",
+  # "gpiozero",
   "pillow>=10.0.0",
-  "requests",
-  "fastapi",
-  "uvicorn",
-  "gpiod>=2.2.1; platform_system == 'Linux'",
+  # "requests",
+  # "fastapi",
+  # "uvicorn",
+  # "gpiod>=2.2.1; platform_system == 'Linux'",
   "pyturbojpeg>=1.8.0",
-  # "opencv-python",
-  "opencv-contrib-python",
+  "opencv-python",
+  # "opencv-contrib-python",
   # "opencv-contrib-python-headless",
-  "matplotlib>=3.9.3",
+  # "matplotlib>=3.9.3",
+  "pynng",
 ]
 
 [project.optional-dependencies]
@@ -57,9 +58,9 @@ repository = "https://github.com/photobooth-app/wigglecam"
 documentation = "https://photobooth-app.org/wigglegramcamera/"
 
 [project.scripts]
-wigglecam-mobile = "examples.lowlevel.gpio:main"
-wigglecam-gui = "examples.gui.camera:main"
-wigglecam-virtual = "examples.lowlevel.multiserver:main"
+# wigglecam-mobile = "examples.lowlevel.gpio:main"
+# wigglecam-gui = "examples.gui.camera:main"
+# wigglecam-virtual = "examples.lowlevel.multiserver:main"
 wigglecam-node = "wigglecam.__main__:main"
 
 [dependency-groups]
@@ -140,4 +141,4 @@ requires = ["uv_build>=0.8.3,<0.10.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
-module-name = ["wigglecam", "examples"]
+module-name = ["wigglecam"]

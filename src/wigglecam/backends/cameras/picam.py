@@ -1,8 +1,7 @@
-import dataclasses
 import io
 import logging
 import time
-from threading import BrokenBarrierError, Condition, Event, current_thread
+from threading import Condition, Event, current_thread
 from typing import cast
 
 import cv2
@@ -12,24 +11,14 @@ from picamera2.encoders import MJPEGEncoder, Quality  # type: ignore
 from picamera2.outputs import FileOutput  # type: ignore
 from PIL import Image
 
-from ....utils.stoppablethread import StoppableThread
 from ...config.models import ConfigBackendPicamera2
-from .abstractbackend import AbstractCameraBackend, Formats, StreamingOutput
+from ...utils.stoppablethread import StoppableThread
+from ..base import CameraBackend, StreamingOutput
 
 logger = logging.getLogger(__name__)
 
 
-@dataclasses.dataclass
-class HiresData:
-    # signal to producer that requesting thread is ready to be notified
-    request_hires_still: Event
-    # condition when frame is avail
-    condition: Condition
-    # dataframe
-    frame: bytes | None
-
-
-class Picamera2Backend(AbstractCameraBackend):
+class Picam(CameraBackend):
     def __init__(self, config: ConfigBackendPicamera2):
         super().__init__()
         # init with arguments
@@ -109,10 +98,7 @@ class Picamera2Backend(AbstractCameraBackend):
         logger.info(f"camera_controls: {self._picamera2.camera_controls}")
         logger.info(f"controls: {self._picamera2.controls}")
         logger.info(f"camera_properties: {self._picamera2.camera_properties}")
-        logger.info(f"nominal framerate set to {self._nominal_framerate}")
         logger.debug(f"{self.__module__} started")
-
-        self._started_evt.set()
 
     def stop(self):
         super().stop()
@@ -170,10 +156,10 @@ class Picamera2Backend(AbstractCameraBackend):
     def done_hires_frames(self):
         self._hires_data.request_hires_still.clear()
 
-    def wait_for_hires_image(self, format: Formats) -> bytes:
+    def wait_for_hires_image(self, format: ImageFormats) -> bytes:
         return super().wait_for_hires_image(format=format)
 
-    def encode_frame_to_image(self, frame, format: Formats) -> bytes:
+    def encode_frame_to_image(self, frame, format: ImageFormats) -> bytes:
         assert self._picamera2
         # for picamera2 frame is a picamera2 buffer so conversion needed. can be RGB or YUV420 depending on memory opt
         if format == "jpeg":
@@ -199,23 +185,6 @@ class Picamera2Backend(AbstractCameraBackend):
         else:
             raise NotImplementedError
 
-    def _check_framerate(self):
-        assert self._picamera2
-        # assert self._nominal_framerate
-
-        framedurationlimits = self._picamera2.camera_controls["FrameDurationLimits"][:2]  # limits is in µs (min,max)
-        fpslimits = tuple([round(1.0 / (val * 1.0e-6), 1) for val in framedurationlimits])  # converted to frames per second fps
-
-        logger.info(f"min frame duration {framedurationlimits[0]}, max frame duration {framedurationlimits[1]}")
-        logger.info(f"max fps {fpslimits[0]}, min fps {fpslimits[1]}")
-
-        if self._nominal_framerate >= fpslimits[0] or self._nominal_framerate <= fpslimits[1]:
-            raise RuntimeError("nominal framerate is out of camera limits!")
-
-        WARNING_THRESHOLD = 0.1
-        if self._nominal_framerate > (fpslimits[0] * (1 - WARNING_THRESHOLD)) or self._nominal_framerate < fpslimits[1] * (1 + WARNING_THRESHOLD):
-            logger.warning("nominal framerate is close to cameras capabilities, this might have effect on sync performance!")
-
     def _init_autofocus(self):
         assert self._picamera2
         """
@@ -235,29 +204,10 @@ class Picamera2Backend(AbstractCameraBackend):
 
         logger.debug("autofocus set")
 
-    def recover(self):
-        assert self._picamera2
-        tms = time.time()
-        try:
-            self._picamera2.drop_frames(2)
-        except Exception:
-            pass
-
-        logger.info(f"recovered, time taken: {round((time.time() - tms) * 1.0e3, 0)}ms")
-
-    def _backend_adjust(self, adjust_amount_ns: int):
-        assert self._picamera2
-        with self._picamera2.controls as ctrl:
-            fixed_frame_duration = int(1.0 / self._nominal_framerate * 1e6 + adjust_amount_ns * 1e-3)
-            ctrl.FrameDurationLimits = (fixed_frame_duration,) * 2
-
-    def _camera_fun(self):
+    async def _device_fun(self):
         assert self._picamera2
         assert self._hires_data
         logger.debug("starting _camera_fun")
-
-        # wait until all threads are actually started before process anything. mostly relevent for the _fun's defined in abstract
-        self._started_evt.wait(timeout=10)  # we wait very long, it would usually not time out except there is a bug and this unstalls
 
         while not cast(StoppableThread, current_thread()).stopped():
             if self._hires_data.request_hires_still.is_set():
@@ -281,13 +231,5 @@ class Picamera2Backend(AbstractCameraBackend):
                 except TimeoutError as exc:
                     logger.warning(f"camera timed out: {exc}")
                     break
-
-            self._current_timestampset.camera = picam_metadata["SensorTimestamp"]
-
-            try:
-                self._barrier.wait()
-            except BrokenBarrierError:
-                logger.debug("sync barrier broke")
-                break
 
         logger.info("_camera_fun left")
