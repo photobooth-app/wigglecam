@@ -12,33 +12,33 @@ permissions:
 
 jobs:
   tests:
-    env:
-      acquisition__camera_backends__active_backend: VirtualCamera
-      acquisition__io_backends__active_backend: VirtualIo
+    # env:
+      # acquisition__camera_backends__active_backend: VirtualCamera
+      # acquisition__io_backends__active_backend: VirtualIo
 
     runs-on: ubuntu-latest
     continue-on-error: false
     strategy:
       fail-fast: true
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - name: Set up Python and uv ${{ matrix.python-version }}
+        uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python-version }}
+          enable-cache: true
       - name: Install system apt dependencies
         run: |
           sudo apt update
-          sudo apt -y install libturbojpeg python3-pip libgl1 git
-      - name: install pdm
+          sudo apt -y install libturbojpeg
+      - name: install the project
         run: |
-          pipx install pdm # on hosted pipx is installed
-          pdm install
+          uv sync --all-extras --dev
       - name: Run pytest
         run: |
-          pdm run test
+          uv run poe test
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-${{ matrix.python-version }}
@@ -53,14 +53,13 @@ jobs:
     if: ${{ github.repository_owner == 'photobooth-app' }}
 
     steps:
-      - uses: actions/checkout@v4
-      - run: pipx install pdm
-      - run: pipx ensurepath
-      - run: pdm venv create --force 3.11 --system-site-packages # incl system site to allow for picamera2 to import
-      - run: pdm install # install in-project env
+      - uses: actions/checkout@v5
+      - run: uv venv --system-site-packages
+      - run: uv sync --all-extras --dev # install in-project env
+      
       - name: Test with pytest
         run: |
-          pdm run test
+          uv run poe test
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-hardware-rpi

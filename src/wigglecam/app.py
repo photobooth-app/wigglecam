@@ -14,6 +14,7 @@ class CameraApp:
         self.trigger = trigger
 
         self._config = CfgApp()
+        # allow overwriting the device id based on args.parsed.
         self._config.device_id = self._config.device_id if not device_id else device_id
 
         self.pub_lo = pynng.Pub0()  # using pub instead push because we just want to broadcast and push would queue if not pulled
