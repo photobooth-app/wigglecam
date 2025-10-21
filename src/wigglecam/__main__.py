@@ -4,9 +4,11 @@ import argparse
 import asyncio
 import importlib
 import logging
+import sys
 
 from .app import CameraApp
-from .backends.base import CameraBackend, TriggerBackend
+from .backends.cameras.base import CameraBackend
+from .backends.triggers.base import TriggerBackend
 
 # --- Registry ------------------------
 
@@ -17,10 +19,10 @@ TRIGGER_CLASSES = ["Pynng"]
 # --- Backend Factory ---------------------------------------------------
 
 
-def camera_factory(class_name: str) -> CameraBackend:
+def camera_factory(class_name: str, device_id: int) -> CameraBackend:
     module_path = f".backends.cameras.{class_name.lower()}"
     module = importlib.import_module(module_path, __package__)
-    return getattr(module, class_name)()
+    return getattr(module, class_name)(device_id)
 
 
 def trigger_factory(class_name: str) -> TriggerBackend:
@@ -40,7 +42,7 @@ def resolve_class_name(cli_value: str, registry: list[str]) -> str:
 # --- Argparse ---------------------------------------------------
 
 
-def parse_args():
+def parse_args(args):
     parser = argparse.ArgumentParser(description="CameraApp with pluggable backends")
 
     parser.add_argument(
@@ -58,34 +60,39 @@ def parse_args():
     parser.add_argument(
         "--device-id",
         type=int,
-        default=None,
+        default=0,
         help="Device ID",
     )
 
-    return parser.parse_args()
+    return parser.parse_args(args)
 
 
 # --- Main -------------------------------------------------------
 
 
-def main():
-    logging.basicConfig(level=logging.INFO)
+def main(args=None, run_app: bool = True):
+    fmt = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
+    logging.basicConfig(level=logging.DEBUG, format=fmt)
 
-    args = parse_args()
+    args = parse_args(args)  # parse here, not above because pytest system exit 2
 
     camera_class = resolve_class_name(args.camera, CAMERA_CLASSES)
     trigger_class = resolve_class_name(args.trigger, TRIGGER_CLASSES)
 
-    camera = camera_factory(camera_class)
+    camera = camera_factory(camera_class, args.device_id)
     trigger = trigger_factory(trigger_class)
 
-    camera_app = CameraApp(camera, trigger, args.device_id)
+    camera_app = CameraApp(camera, trigger)
 
     try:
-        asyncio.run(camera_app.run())
+        if run_app:
+            print(f"Start device Id {args.device_id}")
+
+            asyncio.run(camera_app.run())
+
     except KeyboardInterrupt:
         print("Exit app.")
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main(args=sys.argv[1:]))  # for testing

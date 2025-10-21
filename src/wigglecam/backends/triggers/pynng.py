@@ -1,10 +1,13 @@
 import asyncio
+import logging
 import uuid
 
 import pynng
 
 from ...config.trigger_pynng import CfgTriggerPynng
-from ..base import TriggerBackend
+from .base import TriggerBackend
+
+logger = logging.getLogger(__name__)
 
 
 class Pynng(TriggerBackend):
@@ -17,6 +20,8 @@ class Pynng(TriggerBackend):
 
         self.queue = asyncio.Queue()
 
+        logger.info(f"PynngTrigger initialized, connecting to server {self._config.server}")
+
     async def run(self):
         while True:
             msg = await self.sub_trigger.arecv()
@@ -24,5 +29,5 @@ class Pynng(TriggerBackend):
 
             await self.queue.put(survey_id)
 
-    async def wait_for_trigger(self):
+    async def wait_for_trigger(self) -> uuid.UUID:
         return await self.queue.get()

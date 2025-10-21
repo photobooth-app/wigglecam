@@ -5,14 +5,13 @@ description = "Wigglecam package help you building an awesome camera."
 version = "0.0.2"
 authors = [{ name = "Michael G", email = "me@mgineer85.de" }]
 maintainers = [{ name = "Michael G", email = "me@mgineer85.de" }]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 readme = "README.md"
 license = { text = "MIT" }
 classifiers = [
   "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
@@ -35,18 +34,11 @@ keywords = [
 dependencies = [
   "pydantic",
   "pydantic-settings",
-  # "gpiozero",
   "pillow>=10.0.0",
-  # "requests",
-  # "fastapi",
-  # "uvicorn",
-  # "gpiod>=2.2.1; platform_system == 'Linux'",
-  "pyturbojpeg>=1.8.0",
+  "simplejpeg",
   "opencv-python",
-  # "opencv-contrib-python",
-  # "opencv-contrib-python-headless",
-  # "matplotlib>=3.9.3",
   "pynng",
+
 ]
 
 # [project.optional-dependencies]
@@ -71,9 +63,10 @@ dev = [
   "pytest-cov",
   "coverage[toml]",
   "numpy",
-  "simplejpeg",                         # might be installed globally already on Pi but in older version incompatible to numpy2. used internally by picamera2
   "pyright",
   "poethepoet",
+  "pyturbojpeg>=1.8.0",                 # for benchmark only, actually use simplejpeg here
+  "picamera2",                          # need to install apt libcap-dev
 ]
 
 

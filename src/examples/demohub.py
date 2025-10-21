@@ -41,7 +41,7 @@ async def main():
             lores_frames[msg.device_id] = img
 
     async def hires_task():
-        base_dir = "job_results"
+        base_dir = "tmp/job_results"
         os.makedirs(base_dir, exist_ok=True)
 
         while True:
@@ -109,7 +109,10 @@ async def main():
 
 
 def run_async():
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("Exit app.")
 
 
 if __name__ == "__main__":

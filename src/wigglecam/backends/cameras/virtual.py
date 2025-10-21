@@ -1,11 +1,17 @@
 import asyncio
 import io
+import logging
+import uuid
 
 import numpy
 from PIL import Image, ImageDraw
 
 from ...config.camera_virtual import CfgCameraVirtual
-from ..base import CameraBackend, StreamingOutput
+from ...dto import ImageMessage
+from .base import CameraBackend
+from .output.pynng import PynngOutput
+
+logger = logging.getLogger(__name__)
 
 
 class Virtual(CameraBackend):
@@ -14,14 +20,15 @@ class Virtual(CameraBackend):
     Produces both 'lores' and 'hires' frames as byte strings.
     """
 
-    def __init__(self):
+    def __init__(self, device_id: int):
         self._config = CfgCameraVirtual()
+        super().__init__(device_id, PynngOutput(f"tcp://{self._config.server}:5556"), PynngOutput(f"tcp://{self._config.server}:5557"))
 
-        self._stream_output = StreamingOutput()
         self._offset_x = 0
         self._offset_y = 0
         self._color_current = 0
-        self._task = None
+
+        logger.info(f"VirtualBackend initialized, {device_id=}, imgages stream to server {self._config.server}")
 
     async def run(self):
         while True:
@@ -29,15 +36,16 @@ class Virtual(CameraBackend):
             produced_frame = await asyncio.to_thread(self._produce_dummy_image)
 
             # For demo, use same image for lores and hires
-            await self._stream_output.write(produced_frame)
+            msg_bytes = ImageMessage(self._device_id, jpg_bytes=produced_frame).to_bytes()
+            self._output_lores.write(msg_bytes)  # TODO: improve for async create separate loop for processing to avoid blocking this thread.
 
             await asyncio.sleep(1.0 / self._config.fps_nominal)
 
-    async def wait_for_lores_image(self) -> bytes:
-        return await self._stream_output.wait_for_frame(timeout=2.0)
+    async def trigger_hires_capture(self, job_id: uuid.UUID):
+        produced_frame = await asyncio.to_thread(self._produce_dummy_image)
 
-    async def wait_for_hires_image(self) -> bytes:
-        return await self._stream_output.wait_for_frame(timeout=2.0)
+        msg_bytes = ImageMessage(self._device_id, jpg_bytes=produced_frame, job_id=job_id).to_bytes()
+        self._output_hires.write(msg_bytes)  # TODO: improve for async create separate loop for processing to avoid blocking this thread.
 
     def _produce_dummy_image(self) -> bytes:
         """CPU-intensive image generator — run in a worker thread."""
@@ -63,11 +71,7 @@ class Virtual(CameraBackend):
         imarray = numpy.round(255 * imarray).astype(numpy.uint8)
 
         random_image = Image.fromarray(imarray, "RGB")
-        random_image.paste(
-            mask,
-            (size // ellipse_divider + offset_x, size // ellipse_divider + offset_y),
-            mask=mask,
-        )
+        random_image.paste(mask, (size // ellipse_divider + offset_x, size // ellipse_divider + offset_y), mask=mask)
 
         random_image.save(byte_io, format="JPEG", quality=70)
         return byte_io.getvalue()
