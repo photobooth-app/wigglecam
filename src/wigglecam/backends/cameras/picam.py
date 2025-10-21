@@ -12,7 +12,7 @@ from picamera2.encoders import MJPEGEncoder, Quality  # type: ignore
 from picamera2.outputs import FileOutput  # type: ignore
 from PIL import Image
 
-from ...config.models import ConfigBackendPicamera2
+from ...config.camera_picamera2 import CfgCameraPicamera2
 from ...utils.stoppablethread import StoppableThread
 from ..base import CameraBackend, StreamingOutput
 
@@ -20,10 +20,8 @@ logger = logging.getLogger(__name__)
 
 
 class Picam(CameraBackend):
-    def __init__(self, config: ConfigBackendPicamera2):
-        super().__init__()
-        # init with arguments
-        self._config: ConfigBackendPicamera2 = config
+    def __init__(self):
+        self._config = CfgCameraPicamera2()
 
         # private props
         self._picamera2: Picamera2 | None = None

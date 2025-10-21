@@ -8,11 +8,6 @@ import logging
 from .app import CameraApp
 from .backends.base import CameraBackend, TriggerBackend
 
-# --- CONSTANTS, maybe later args? -----
-
-SERVER_IP = "0.0.0.0"
-
-
 # --- Registry ------------------------
 
 CAMERA_CLASSES = ["Virtual", "Picam"]
@@ -31,7 +26,7 @@ def camera_factory(class_name: str) -> CameraBackend:
 def trigger_factory(class_name: str) -> TriggerBackend:
     module_path = f".backends.triggers.{class_name.lower()}"
     module = importlib.import_module(module_path, __package__)
-    return getattr(module, class_name)(SERVER_IP)
+    return getattr(module, class_name)()
 
 
 def resolve_class_name(cli_value: str, registry: list[str]) -> str:
@@ -61,9 +56,9 @@ def parse_args():
         help="Trigger backend to use",
     )
     parser.add_argument(
-        "--id",
+        "--device-id",
         type=int,
-        default=0,
+        default=None,
         help="Device ID",
     )
 
@@ -84,8 +79,12 @@ def main():
     camera = camera_factory(camera_class)
     trigger = trigger_factory(trigger_class)
 
-    app = CameraApp(camera, trigger, device_id=args.id, server=SERVER_IP)
-    asyncio.run(app.run())
+    camera_app = CameraApp(camera, trigger, args.device_id)
+
+    try:
+        asyncio.run(camera_app.run())
+    except KeyboardInterrupt:
+        print("Exit app.")
 
 
 if __name__ == "__main__":

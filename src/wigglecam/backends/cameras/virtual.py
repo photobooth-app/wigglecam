@@ -4,6 +4,7 @@ import io
 import numpy
 from PIL import Image, ImageDraw
 
+from ...config.camera_virtual import CfgCameraVirtual
 from ..base import CameraBackend, StreamingOutput
 
 
@@ -13,9 +14,10 @@ class Virtual(CameraBackend):
     Produces both 'lores' and 'hires' frames as byte strings.
     """
 
-    def __init__(self, interval: float = 0.25):
+    def __init__(self):
+        self._config = CfgCameraVirtual()
+
         self._stream_output = StreamingOutput()
-        self._interval = interval
         self._offset_x = 0
         self._offset_y = 0
         self._color_current = 0
@@ -29,7 +31,7 @@ class Virtual(CameraBackend):
             # For demo, use same image for lores and hires
             await self._stream_output.write(produced_frame)
 
-            await asyncio.sleep(self._interval)
+            await asyncio.sleep(1.0 / self._config.fps_nominal)
 
     async def wait_for_lores_image(self) -> bytes:
         return await self._stream_output.wait_for_frame(timeout=2.0)

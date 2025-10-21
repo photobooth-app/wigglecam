@@ -3,15 +3,18 @@ import uuid
 
 import pynng
 
+from ...config.trigger_pynng import CfgTriggerPynng
 from ..base import TriggerBackend
 
 
 class Pynng(TriggerBackend):
-    def __init__(self, server: str):
-        self._server = server
+    def __init__(self):
+        self._config = CfgTriggerPynng()
+
         self.sub_trigger = pynng.Sub0()
         self.sub_trigger.subscribe(b"")
-        self.sub_trigger.dial(address=f"tcp://{self._server}:5555", block=False)
+        self.sub_trigger.dial(address=f"tcp://{self._config.server}:5555", block=False)
+
         self.queue = asyncio.Queue()
 
     async def run(self):
