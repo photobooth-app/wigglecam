@@ -45,9 +45,11 @@ jobs:
           path: coverage.xml
 
   tests-hardware-rpi:
-    # env:
+    env:
       ## Sets environment variable
-
+      # use system python to allow for picamera2 to import
+      UV_PYTHON: 3.11
+      UV_PYTHON_PREFERENCE: only-system
 
     runs-on: [self-hosted, rpi]
     if: ${{ github.repository_owner == 'photobooth-app' }}
