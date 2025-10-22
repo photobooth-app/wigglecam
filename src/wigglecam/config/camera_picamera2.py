@@ -9,7 +9,7 @@ from .base import CfgBaseSettings
 class CfgCameraPicamera2(CfgBaseSettings):
     model_config = SettingsConfigDict(env_prefix="camera_")
 
-    server: str = Field(default="0.0.0.0")
+    # server: str = Field(default="0.0.0.0")
 
     camera_num: int = Field(default=0)
     framerate: int = Field(default=8)

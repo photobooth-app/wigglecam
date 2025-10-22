@@ -22,13 +22,13 @@ class Virtual(CameraBackend):
 
     def __init__(self, device_id: int):
         self._config = CfgCameraVirtual()
-        super().__init__(device_id, PynngOutput(f"tcp://{self._config.server}:5556"), PynngOutput(f"tcp://{self._config.server}:5557"))
+        super().__init__(device_id, PynngOutput("tcp://0.0.0.0:5556"), PynngOutput("tcp://0.0.0.0:5557"))
 
         self._offset_x = 0
         self._offset_y = 0
         self._color_current = 0
 
-        logger.info(f"VirtualBackend initialized, {device_id=}, imgages stream to server {self._config.server}")
+        logger.info(f"VirtualBackend initialized, {device_id=}, listening for subs")
 
     async def run(self):
         while True:

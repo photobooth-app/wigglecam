@@ -14,19 +14,23 @@ async def main():
     sub_lo = pynng.Sub0()  # Pipeline pull for lores stream.
     sub_lo.subscribe(b"")
     # block=False means continue program and try to connect in the background without any exception
-    sub_lo.listen("tcp://0.0.0.0:5556")  # , block=False)
+    sub_lo.dial("tcp://0.0.0.0:5556", block=False)
+
+    # TODO: later:
+    # for addr in addresses:
+    #     sub.dial(addr, block=False)
 
     sub_hi = pynng.Sub0()  # Pipeline pull for lores stream.
     sub_hi.subscribe(b"")
     sub_hi.recv_timeout = 1000
     # block=False means continue program and try to connect in the background without any exception
-    sub_hi.listen("tcp://0.0.0.0:5557")  # , block=False)
+    sub_hi.dial("tcp://0.0.0.0:5557", block=False)
 
     # host also subscribes to the hires replies
     pub_trigger = pynng.Pub0()
     # surveyor_hi.survey_time = 1000
     # block=False means continue program and try to connect in the background without any exception
-    pub_trigger.listen("tcp://0.0.0.0:5555")  # , block=False)
+    pub_trigger.dial("tcp://0.0.0.0:5555", block=False)
 
     lores_frames = {}
     trigger = asyncio.Event()

@@ -16,11 +16,11 @@ class Pynng(TriggerBackend):
 
         self.sub_trigger = pynng.Sub0()
         self.sub_trigger.subscribe(b"")
-        self.sub_trigger.dial(address=f"tcp://{self._config.server}:5555", block=False)
+        self.sub_trigger.listen(address="tcp://0.0.0.0:5555")  # , block=False)
 
         self.queue = asyncio.Queue()
 
-        logger.info(f"PynngTrigger initialized, connecting to server {self._config.server}")
+        logger.info("PynngTrigger initialized, listening for trigger-connections")
 
     async def run(self):
         while True:

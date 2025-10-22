@@ -19,11 +19,11 @@ logger = logging.getLogger(__name__)
 class Picam(CameraBackend):
     def __init__(self, device_id: int):
         self._config = CfgCameraPicamera2()
-        super().__init__(device_id, PynngOutput(f"tcp://{self._config.server}:5556"), PynngOutput(f"tcp://{self._config.server}:5556"))
+        super().__init__(device_id, PynngOutput("tcp://0.0.0.0:5556"), PynngOutput("tcp://0.0.0.0:5556"))
 
         self._picamera2: Picamera2 | None = None
 
-        logger.info(f"Picamera2Backend initialized, {device_id=}, connecting to server {self._config.server}")
+        logger.info(f"Picamera2Backend initialized, {device_id=}, listening for subs")
 
     async def trigger_hires_capture(self, job_id: uuid.UUID):
         jpeg_bytes = await asyncio.to_thread(self._produce_image)
