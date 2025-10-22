@@ -32,7 +32,7 @@ jobs:
       - name: Install system apt dependencies
         run: |
           sudo apt update
-          sudo apt -y install libturbojpeg
+          sudo apt -y install libturbojpeg libcap-dev
       - name: install the project
         run: |
           uv sync --all-extras --dev
