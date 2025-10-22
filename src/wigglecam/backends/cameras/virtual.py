@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw
 from ...config.camera_virtual import CfgCameraVirtual
 from ...dto import ImageMessage
 from .base import CameraBackend
-from .output.pynng import PynngOutput
+from .output.base import CameraOutput
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +20,9 @@ class Virtual(CameraBackend):
     Produces both 'lores' and 'hires' frames as byte strings.
     """
 
-    def __init__(self, device_id: int):
+    def __init__(self, device_id: int, output_lores: CameraOutput, output_hires: CameraOutput):
         self._config = CfgCameraVirtual()
-        super().__init__(device_id, PynngOutput("tcp://0.0.0.0:5556"), PynngOutput("tcp://0.0.0.0:5557"))
+        super().__init__(device_id, output_lores, output_hires)
 
         self._offset_x = 0
         self._offset_y = 0

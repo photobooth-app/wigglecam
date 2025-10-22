@@ -8,6 +8,8 @@ import sys
 
 from .app import CameraApp
 from .backends.cameras.base import CameraBackend
+from .backends.cameras.output.base import CameraOutput
+from .backends.cameras.output.pynng import PynngOutput
 from .backends.triggers.base import TriggerBackend
 
 # --- Registry ------------------------
@@ -19,10 +21,10 @@ TRIGGER_CLASSES = ["Pynng"]
 # --- Backend Factory ---------------------------------------------------
 
 
-def camera_factory(class_name: str, device_id: int) -> CameraBackend:
+def camera_factory(class_name: str, device_id: int, output_lores: CameraOutput, output_hires: CameraOutput) -> CameraBackend:
     module_path = f".backends.cameras.{class_name.lower()}"
     module = importlib.import_module(module_path, __package__)
-    return getattr(module, class_name)(device_id)
+    return getattr(module, class_name)(device_id, output_lores, output_hires)
 
 
 def trigger_factory(class_name: str) -> TriggerBackend:
@@ -79,17 +81,19 @@ def main(args=None, run_app: bool = True):
     camera_class = resolve_class_name(args.camera, CAMERA_CLASSES)
     trigger_class = resolve_class_name(args.trigger, TRIGGER_CLASSES)
 
-    camera = camera_factory(camera_class, args.device_id)
+    output_lores = PynngOutput("tcp://localhost:5556")
+    output_hires = PynngOutput("tcp://localhost:5557")
+    camera = camera_factory(camera_class, args.device_id, output_lores, output_hires)
+
     trigger = trigger_factory(trigger_class)
 
     camera_app = CameraApp(camera, trigger)
 
+    print(f"Device Id: {args.device_id}")
+
     try:
         if run_app:
-            print(f"Start device Id {args.device_id}")
-
             asyncio.run(camera_app.run())
-
     except KeyboardInterrupt:
         print("Exit app.")
 
