@@ -4,7 +4,15 @@
   "[python]": {
     "editor.defaultFormatter": "charliermarsh.ruff"
   },
-  "python.testing.pytestArgs": ["--basetemp=./tests_tmp/", "./src/tests/"],
+  "python.testing.pytestArgs": [
+    "--basetemp=./tests_tmp/", 
+    "./src/tests/",   
+    "-v",
+    "--cov",
+    "--cov-append",
+    "--cov-report=xml:coverage.xml",
+    "./"
+  ],
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true
 }
