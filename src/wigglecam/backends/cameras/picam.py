@@ -7,7 +7,7 @@ from libcamera import Transform, controls  # type: ignore
 from picamera2 import Picamera2
 from picamera2.encoders import MJPEGEncoder, Quality
 
-from wigglecam.backends.cameras.output.pynng import PynngOutput
+from wigglecam.backends.cameras.output.pynng import PynngCameraOutput
 
 from ...config.camera_picamera2 import CfgCameraPicamera2
 from ...dto import ImageMessage
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class Picam(CameraBackend):
     def __init__(self, device_id: int):
         self._config = CfgCameraPicamera2()
-        super().__init__(device_id, PynngOutput("tcp://0.0.0.0:5556"), PynngOutput("tcp://0.0.0.0:5556"))
+        super().__init__(device_id, PynngCameraOutput("tcp://0.0.0.0:5556"), PynngCameraOutput("tcp://0.0.0.0:5556"))
 
         self._picamera2: Picamera2 | None = None
 

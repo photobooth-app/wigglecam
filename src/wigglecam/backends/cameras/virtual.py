@@ -21,12 +21,12 @@ class Virtual(CameraBackend):
     """
 
     def __init__(self, device_id: int, output_lores: CameraOutput, output_hires: CameraOutput):
-        self._config = CfgCameraVirtual()
+        self.__config = CfgCameraVirtual()
         super().__init__(device_id, output_lores, output_hires)
 
-        self._offset_x = 0
-        self._offset_y = 0
-        self._color_current = 0
+        self.__offset_x = 0
+        self.__offset_y = 0
+        self.__color_current = 0
 
         logger.info(f"VirtualBackend initialized, {device_id=}, listening for subs")
 
@@ -39,7 +39,7 @@ class Virtual(CameraBackend):
             msg_bytes = ImageMessage(self._device_id, jpg_bytes=produced_frame).to_bytes()
             self._output_lores.write(msg_bytes)  # TODO: improve for async create separate loop for processing to avoid blocking this thread.
 
-            await asyncio.sleep(1.0 / self._config.fps_nominal)
+            await asyncio.sleep(1.0 / self.__config.fps_nominal)
 
     async def trigger_hires_capture(self, job_id: uuid.UUID):
         produced_frame = await asyncio.to_thread(self._produce_dummy_image)
@@ -49,8 +49,8 @@ class Virtual(CameraBackend):
 
     def _produce_dummy_image(self) -> bytes:
         """CPU-intensive image generator — run in a worker thread."""
-        offset_x = self._offset_x
-        offset_y = self._offset_y
+        offset_x = self.__offset_x
+        offset_y = self.__offset_y
 
         size = 250
         ellipse_divider = 3
@@ -61,8 +61,8 @@ class Virtual(CameraBackend):
         draw = ImageDraw.Draw(mask)
         draw.ellipse((0, 0, size // ellipse_divider, size // ellipse_divider), fill=255)
 
-        time_normalized = self._color_current / color_steps
-        self._color_current = self._color_current + 1 if self._color_current < color_steps else 0
+        time_normalized = self.__color_current / color_steps
+        self.__color_current = self.__color_current + 1 if self.__color_current < color_steps else 0
 
         imarray = numpy.empty((size, size, 3))
         imarray[:, :, 0] = 0.5 + 0.5 * numpy.sin(2 * numpy.pi * (0 / 3 + time_normalized))

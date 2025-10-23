@@ -1,8 +1,9 @@
 import abc
+import uuid
 
 
-class CameraOutput(abc.ABC):
+class TriggerInput(abc.ABC):
     @abc.abstractmethod
     def __init__(self, *args, **kwargs): ...
     @abc.abstractmethod
-    def write(self, buf: bytes) -> int: ...
+    async def receive_job_id(self) -> uuid.UUID: ...

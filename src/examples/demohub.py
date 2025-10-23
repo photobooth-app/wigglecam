@@ -8,29 +8,41 @@ import pynng
 
 from wigglecam.dto import ImageMessage
 
+DEVICES = [
+    ("localhost", 5550),  # connect to, base-port
+    ("localhost", 5560),
+]
+
 
 async def main():
-    # host subscribes to all devices, need to have the ips then?!
+    # host also subscribes to the hires replies
+    pub_trigger = pynng.Pub0()
     sub_lo = pynng.Sub0()  # Pipeline pull for lores stream.
     sub_lo.subscribe(b"")
-    # block=False means continue program and try to connect in the background without any exception
-    sub_lo.dial("tcp://0.0.0.0:5556", block=False)
-
-    # TODO: later:
-    # for addr in addresses:
-    #     sub.dial(addr, block=False)
-
     sub_hi = pynng.Sub0()  # Pipeline pull for lores stream.
     sub_hi.subscribe(b"")
     sub_hi.recv_timeout = 1000
-    # block=False means continue program and try to connect in the background without any exception
-    sub_hi.dial("tcp://0.0.0.0:5557", block=False)
 
-    # host also subscribes to the hires replies
-    pub_trigger = pynng.Pub0()
-    # surveyor_hi.survey_time = 1000
-    # block=False means continue program and try to connect in the background without any exception
-    pub_trigger.dial("tcp://0.0.0.0:5555", block=False)
+    # def cb_connected(pipe: pynng.Pipe):
+    #     print("Verbunden:", len(pub_trigger.pipes))
+
+    # def cb_disconnected(pipe: pynng.Pipe):
+    #     active = [p for p in pub_trigger.pipes if not p.closed]
+    #     print("Noch verbunden:", len(active))
+    #     print("Noch verbunden:", len(pub_trigger.pipes))
+
+    # pub_trigger.add_post_pipe_connect_cb(cb_connected)
+    # pub_trigger.add_post_pipe_remove_cb(cb_disconnected)
+
+    # print(len(pub_trigger.dialers))
+
+    for host, base_port in DEVICES:
+        # block=False means continue program and try to connect in the background without any exception
+        pub_trigger.dial(f"tcp://{host}:{base_port + 0}", block=False)
+        sub_lo.dial(f"tcp://{host}:{base_port + 1}", block=False)
+        sub_hi.dial(f"tcp://{host}:{base_port + 2}", block=False)
+
+    print(f"listen on base ports {[port[1] for port in DEVICES]} for devices")
 
     lores_frames = {}
     trigger = asyncio.Event()
@@ -51,8 +63,11 @@ async def main():
         while True:
             await trigger.wait()
             trigger.clear()
-
             print("Job start")
+
+            print("connected devices:", len(pub_trigger.pipes))
+            if len(DEVICES) > len(pub_trigger.pipes):
+                print("WARNING: not all devices are connected!")
 
             # Eindeutige ID für diese Umfrage
             job_uuid = uuid.uuid4()
@@ -77,8 +92,13 @@ async def main():
                     with open(os.path.join(job_folder, fname), "wb") as f:
                         f.write(msg.jpg_bytes)
 
+                    if results_no == len(DEVICES):
+                        print("got all results, job completed!")
+                        break
+
                 except pynng.exceptions.Timeout:
-                    print(f"job finished after 1s no more data, got {results_no} result!")
+                    # raise RuntimeError("tis bad, we got not all results!")
+                    print(f"job finished incomplete after 1s no more data, got {results_no} result but {len(DEVICES)} expected!")
                     break
 
     async def ui_task():

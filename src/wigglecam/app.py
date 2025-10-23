@@ -1,26 +1,25 @@
 import asyncio
 
-from wigglecam.config.app import CfgApp
-
 from .backends.cameras.base import CameraBackend
-from .backends.triggers.base import TriggerBackend
+from .backends.triggers.input.base import TriggerInput
+from .config.app import CfgApp
 
 
 class CameraApp:
-    def __init__(self, camera: CameraBackend, trigger: TriggerBackend):
-        self.camera = camera
-        self.trigger = trigger
+    def __init__(self, camera: CameraBackend, trigger_input: TriggerInput):
+        self.__config = CfgApp()
 
-        self._config = CfgApp()
+        self.__camera = camera
+        self.__trigger_input = trigger_input
 
     async def setup(self):
-        asyncio.create_task(self.camera.run())
-        asyncio.create_task(self.trigger.run())
+        asyncio.create_task(self.__camera.run())
+        # asyncio.create_task(self.__trigger.run())
 
     async def job_task(self):
         while True:
-            job_id = await self.trigger.wait_for_trigger()
-            await self.camera.trigger_hires_capture(job_id)
+            job_uuid = await self.__trigger_input.receive_job_id()
+            await self.__camera.trigger_hires_capture(job_uuid)
 
     async def run(self):
         await self.setup()

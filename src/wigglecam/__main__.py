@@ -9,13 +9,15 @@ import sys
 from .app import CameraApp
 from .backends.cameras.base import CameraBackend
 from .backends.cameras.output.base import CameraOutput
-from .backends.cameras.output.pynng import PynngOutput
-from .backends.triggers.base import TriggerBackend
+from .backends.cameras.output.pynng import PynngCameraOutput
+from .backends.triggers.input.pynng import PynngTriggerInput
+
+logger = logging.getLogger(__name__)
+
 
 # --- Registry ------------------------
 
 CAMERA_CLASSES = ["Virtual", "Picam"]
-TRIGGER_CLASSES = ["Pynng"]
 
 
 # --- Backend Factory ---------------------------------------------------
@@ -25,12 +27,6 @@ def camera_factory(class_name: str, device_id: int, output_lores: CameraOutput, 
     module_path = f".backends.cameras.{class_name.lower()}"
     module = importlib.import_module(module_path, __package__)
     return getattr(module, class_name)(device_id, output_lores, output_hires)
-
-
-def trigger_factory(class_name: str) -> TriggerBackend:
-    module_path = f".backends.triggers.{class_name.lower()}"
-    module = importlib.import_module(module_path, __package__)
-    return getattr(module, class_name)()
 
 
 def resolve_class_name(cli_value: str, registry: list[str]) -> str:
@@ -54,16 +50,22 @@ def parse_args(args):
         help="Camera backend to use",
     )
     parser.add_argument(
-        "--trigger",
-        choices=[t.lower() for t in TRIGGER_CLASSES],
-        default=TRIGGER_CLASSES[0].lower(),
-        help="Trigger backend to use",
-    )
-    parser.add_argument(
         "--device-id",
         type=int,
         default=0,
         help="Device ID",
+    )
+    parser.add_argument(
+        "--bind-ip",
+        type=str,
+        default="0.0.0.0",
+        help="Bind pynng listener to IP. 0.0.0.0 means listen on all interfaces.",
+    )
+    parser.add_argument(
+        "--base-port",
+        type=int,
+        default=5550,
+        help="Starting from base-port the app will listen. Use to start multiple instances on one host.",
     )
 
     return parser.parse_args(args)
@@ -78,18 +80,22 @@ def main(args=None, run_app: bool = True):
 
     args = parse_args(args)  # parse here, not above because pytest system exit 2
 
-    camera_class = resolve_class_name(args.camera, CAMERA_CLASSES)
-    trigger_class = resolve_class_name(args.trigger, TRIGGER_CLASSES)
+    port_input_trigger = args.base_port
+    port_output_lores = args.base_port + 1
+    port_output_hires = args.base_port + 2
 
-    output_lores = PynngOutput("tcp://localhost:5556")
-    output_hires = PynngOutput("tcp://localhost:5557")
+    input_trigger = PynngTriggerInput(f"tcp://{args.bind_ip}:{port_input_trigger}")
+    output_lores = PynngCameraOutput(f"tcp://{args.bind_ip}:{port_output_lores}")
+    output_hires = PynngCameraOutput(f"tcp://{args.bind_ip}:{port_output_hires}")
+
+    camera_class = resolve_class_name(args.camera, CAMERA_CLASSES)
     camera = camera_factory(camera_class, args.device_id, output_lores, output_hires)
 
-    trigger = trigger_factory(trigger_class)
+    camera_app = CameraApp(camera, input_trigger)
 
-    camera_app = CameraApp(camera, trigger)
-
-    print(f"Device Id: {args.device_id}")
+    logger.info(f"Device Id: {args.device_id}")
+    logger.info(f"Camera Backend: {camera_class}")
+    logger.info(f"Service bound to {args.bind_ip} and ports [{port_input_trigger},{port_output_lores},{port_output_hires}]")
 
     try:
         if run_app:
