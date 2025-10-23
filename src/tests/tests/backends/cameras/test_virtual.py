@@ -1,7 +1,7 @@
 import asyncio
 import io
 import uuid
-from unittest.mock import Mock
+from unittest.mock import AsyncMock
 
 import pytest
 from PIL import Image
@@ -18,6 +18,10 @@ class DummyOutput(CameraOutput):
         self.written = []
 
     def write(self, buf: bytes) -> int:
+        self.written.append(buf)
+        return len(buf)
+
+    async def awrite(self, buf: bytes) -> int:
         self.written.append(buf)
         return len(buf)
 
@@ -92,14 +96,14 @@ async def test_run_writes_to_lores_once():
 
 @pytest.mark.asyncio
 async def test_trigger_hires_capture_with_mock():
-    lores = Mock()
-    hires = Mock()
+    lores = AsyncMock()
+    hires = AsyncMock()
     cam = Virtual(device_id=1, output_lores=lores, output_hires=hires)
 
     job_id = uuid.uuid4()
     await cam.trigger_hires_capture(job_id)
 
-    hires.write.assert_called_once()
+    hires.awrite.assert_called_once()
     # You can still inspect the actual bytes if needed:
-    written_bytes = hires.write.call_args[0][0]
+    written_bytes = hires.awrite.call_args[0][0]
     assert isinstance(written_bytes, bytes)

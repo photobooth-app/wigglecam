@@ -38,6 +38,7 @@ async def main():
 
     for host, base_port in DEVICES:
         # block=False means continue program and try to connect in the background without any exception
+        print(f"tcp://{host}:{base_port + 0}")
         pub_trigger.dial(f"tcp://{host}:{base_port + 0}", block=False)
         sub_lo.dial(f"tcp://{host}:{base_port + 1}", block=False)
         sub_hi.dial(f"tcp://{host}:{base_port + 2}", block=False)
