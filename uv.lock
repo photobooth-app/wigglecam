@@ -1191,15 +1191,16 @@ wheels = [
 
 [[package]]
 name = "wigglecam"
-version = "0.0.2"
+version = "0.1.0"
 source = { editable = "." }
-dependencies = [
+
+[package.optional-dependencies]
+node = [
     { name = "opencv-python" },
     { name = "pillow" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pynng" },
-    { name = "simplejpeg" },
 ]
 
 [package.dev-dependencies]
@@ -1215,17 +1216,18 @@ dev = [
     { name = "pytest-cov" },
     { name = "pyturbojpeg" },
     { name = "ruff" },
+    { name = "simplejpeg" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "opencv-python" },
-    { name = "pillow", specifier = ">=10.0.0" },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "pynng" },
-    { name = "simplejpeg" },
+    { name = "opencv-python", marker = "extra == 'node'" },
+    { name = "pillow", marker = "extra == 'node'", specifier = ">=10.0.0" },
+    { name = "pydantic", marker = "extra == 'node'" },
+    { name = "pydantic-settings", marker = "extra == 'node'" },
+    { name = "pynng", marker = "extra == 'node'" },
 ]
+provides-extras = ["node"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1241,6 +1243,7 @@ dev = [
     { name = "pytest-cov" },
     { name = "pyturbojpeg", specifier = ">=1.8.0" },
     { name = "ruff" },
+    { name = "simplejpeg" },
 ]
 
 [[package]]

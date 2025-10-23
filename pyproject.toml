@@ -2,7 +2,7 @@
 [project]
 name = "wigglecam"
 description = "Wigglecam package help you building an awesome camera."
-version = "0.0.2"
+version = "0.1.0"
 authors = [{ name = "Michael G", email = "me@mgineer85.de" }]
 maintainers = [{ name = "Michael G", email = "me@mgineer85.de" }]
 requires-python = ">=3.11"
@@ -31,18 +31,17 @@ keywords = [
   "synchronized camera",
 ]
 
-dependencies = [
+# keep empty so we can use the "core" package without additional dependencies to import in the photobooth-app for ImageMessage, ...
+dependencies = []
+
+[project.optional-dependencies]
+node = [
   "pydantic",
   "pydantic-settings",
-  "pillow>=10.0.0",
-  "simplejpeg",
   "opencv-python",
   "pynng",
-
+  "pillow>=10.0.0",
 ]
-
-# [project.optional-dependencies]
-# gui = ["pyside6>=6.8.0.2"]
 
 
 [project.urls]
@@ -65,6 +64,7 @@ dev = [
   "coverage[toml]",
   "numpy",
   "pyright",
+  "simplejpeg",
   "poethepoet",
   "pyturbojpeg>=1.8.0",                 # for benchmark only, actually use simplejpeg here
   "picamera2",                          # need to install apt libcap-dev
