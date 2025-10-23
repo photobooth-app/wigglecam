@@ -61,6 +61,7 @@ dev = [
   "pytest-benchmark",
   "pytest-benchmark[histogram]>=5.1.0",
   "pytest-cov",
+  "pytest-asyncio",
   "coverage[toml]",
   "numpy",
   "pyright",
