@@ -10,6 +10,12 @@ class PynngCameraOutput(CameraOutput):
         # self.pub.listen("ipc:///home/michael/test.sock")
 
     def write(self, buf: bytes) -> int:
+        """Synchronous send."""
         self.__pub.send(buf)
 
+        return len(buf)
+
+    async def awrite(self, buf: bytes) -> int:
+        """Asynchronous send."""
+        await self.__pub.asend(buf)
         return len(buf)

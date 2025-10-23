@@ -37,7 +37,7 @@ class Virtual(CameraBackend):
 
             # For demo, use same image for lores and hires
             msg_bytes = ImageMessage(self._device_id, jpg_bytes=produced_frame).to_bytes()
-            self._output_lores.write(msg_bytes)  # TODO: improve for async create separate loop for processing to avoid blocking this thread.
+            await self._output_lores.awrite(msg_bytes)
 
             await asyncio.sleep(1.0 / self.__config.fps_nominal)
 
@@ -45,7 +45,7 @@ class Virtual(CameraBackend):
         produced_frame = await asyncio.to_thread(self._produce_dummy_image)
 
         msg_bytes = ImageMessage(self._device_id, jpg_bytes=produced_frame, job_id=job_id).to_bytes()
-        self._output_hires.write(msg_bytes)  # TODO: improve for async create separate loop for processing to avoid blocking this thread.
+        await self._output_hires.awrite(msg_bytes)
 
     def _produce_dummy_image(self) -> bytes:
         """CPU-intensive image generator — run in a worker thread."""
