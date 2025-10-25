@@ -38,7 +38,7 @@ dependencies = []
 node = [
   "pydantic",
   "pydantic-settings",
-  "opencv-python",
+  "opencv-contrib-python",
   "pynng",
   "pillow>=10.0.0",
 ]
