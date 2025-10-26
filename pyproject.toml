@@ -39,7 +39,7 @@ node = [
   "pydantic",
   "pydantic-settings",
   "opencv-contrib-python",
-  "pynng",
+  "pynng",                 # needs python3-dev package
   "pillow>=10.0.0",
 ]
 
