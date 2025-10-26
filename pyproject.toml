@@ -67,7 +67,7 @@ dev = [
   "simplejpeg",
   "poethepoet",
   "pyturbojpeg>=1.8.0",                 # for benchmark only, actually use simplejpeg here
-  "picamera2",                          # need to install apt libcap-dev
+  #"picamera2; sys_platform == 'linux'", # need to install apt libcap-dev
 ]
 
 
