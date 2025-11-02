@@ -103,9 +103,9 @@ class Picam(CameraBackend):
         while True:
             # capture metadata blocks until new metadata is avail
             try:
-                meta = await asyncio.to_thread(self.__picamera2.capture_metadata)
+                _ = await asyncio.to_thread(self.__picamera2.capture_metadata)
 
-                print(meta["SensorTimestamp"])
+                # print(meta["SensorTimestamp"])
 
             except TimeoutError as exc:
                 logger.warning(f"camera timed out: {exc}")
