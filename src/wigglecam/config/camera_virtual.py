@@ -5,7 +5,7 @@ from .base import CfgBaseSettings
 
 
 class CfgCameraVirtual(CfgBaseSettings):
-    model_config = SettingsConfigDict(env_prefix="camera_")
+    model_config = SettingsConfigDict(env_prefix="camera_virtual_")
 
     # server: str = Field(default="0.0.0.0")
 
