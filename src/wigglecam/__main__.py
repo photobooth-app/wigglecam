@@ -58,8 +58,8 @@ def parse_args(args):
     parser.add_argument(
         "--bind-ip",
         type=str,
-        default="0.0.0.0",
-        help="Bind pynng listener to IP. 0.0.0.0 means listen on all interfaces.",
+        default="[::]",
+        help="Bind pynng listener to interface. [::] binds to all IPv6 interfaces, which usually includes IPv4 also. Otherwise try 0.0.0.0.",
     )
     parser.add_argument(
         "--base-port",
