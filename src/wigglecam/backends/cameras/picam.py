@@ -5,6 +5,7 @@ import uuid
 
 from libcamera import Transform, controls  # type: ignore
 from picamera2 import Picamera2
+from picamera2.devices.imx708 import IMX708
 from picamera2.encoders import MJPEGEncoder, Quality
 from picamera2.outputs.output import Output
 
@@ -52,12 +53,35 @@ class Picam(CameraBackend):
 
         return jpeg_bytes
 
+    def _set_pi5_hdr(self, enable: bool):
+        """enable/disable Pi5 specific HDR."""
+        assert self.__picamera2
+        if enable:
+            self.__picamera2.set_controls({"HdrMode": controls.HdrModeEnum.SingleExposure})
+        else:
+            self.__picamera2.set_controls({"HdrMode": controls.HdrModeEnum.Off})
+
+    def _set_imx708_hdr(self, enable: bool):
+        """enable/disable imx708 (camera module 3) specific HDR. Resolution if enabled is max (Wxxxx,Hyyyy).
+        Call before opening a Picamera2 object for regular use."""
+        with IMX708(camera_num=self.__config.camera_num) as cam:
+            if enable:
+                cam.set_sensor_hdr_mode(True)
+            else:
+                cam.set_sensor_hdr_mode(False)
+
     async def run(self):
         # initialize private props
 
         logger.debug("starting _camera_fun")
 
+        if self.__config.hdr_type == "imx708":
+            self._set_imx708_hdr(True)
+
         self.__picamera2 = Picamera2(camera_num=self.__config.camera_num)
+
+        if self.__config.hdr_type == "pi5":
+            self._set_pi5_hdr(True)
 
         # configure; camera needs to be stopped before
         append_optmemory_format = {}
@@ -96,7 +120,9 @@ class Picam(CameraBackend):
         logger.info(f"{self.__picamera2.controls=}")
         logger.info(f"{self.__picamera2.camera_properties=}")
 
-        self.__picamera2.start_recording(MJPEGEncoder(), self.__picamera2_output_lores, quality=Quality[self.__config.videostream_quality])
+        mjpeg_encoder = MJPEGEncoder()
+        mjpeg_encoder.frame_skip_count = self.__config.frame_skip_count
+        self.__picamera2.start_recording(mjpeg_encoder, self.__picamera2_output_lores, quality=Quality[self.__config.videostream_quality])
 
         logger.debug(f"{self.__module__} started")
 
