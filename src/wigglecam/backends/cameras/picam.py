@@ -146,12 +146,12 @@ class Picam(CameraBackend):
         while True:
             # capture metadata blocks until new metadata is avail
             try:
-                meta = await asyncio.to_thread(self.__picamera2.capture_metadata)
+                _ = await asyncio.to_thread(self.__picamera2.capture_metadata)
 
                 # when sync client/server is enabled, the captures are synchronized by libcamera in the background
                 # at one point there is the SyncTimer true. We do not supvervise it for now, so if there is no server
                 # we don't know that the cameras are out of sync. Might improve later...
-                print("Sync ready:", meta.get("SyncReady"), "    Sync lag:", meta.get("SyncTimer"))
+                # print("Sync ready:", meta.get("SyncReady"), "    Sync lag:", meta.get("SyncTimer"))
 
             except TimeoutError as exc:
                 logger.warning(f"camera timed out: {exc}")
