@@ -17,7 +17,7 @@ class CfgCameraPicamera2(CfgBaseSettings):
     camera_res_width: int = Field(default=2304)  # max 2304 if HDR type imx708, otherwise 4608
     camera_res_height: int = Field(default=1296)  # max 1296 if HDR type imx708, otherwise 2592
     hdr_type: Literal["unset", "imx708", "pi5"] = Field(
-        default="imx708",
+        default="unset",
         description="Choose whatever hardware is used. Unset does not actively disable, but just do nothing. To disable, unpower.",
     )
 

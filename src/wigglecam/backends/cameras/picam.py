@@ -64,11 +64,14 @@ class Picam(CameraBackend):
     def _set_imx708_hdr(self, enable: bool):
         """enable/disable imx708 (camera module 3) specific HDR. Resolution if enabled is max (Wxxxx,Hyyyy).
         Call before opening a Picamera2 object for regular use."""
-        with IMX708(camera_num=self.__config.camera_num) as cam:
-            if enable:
-                cam.set_sensor_hdr_mode(True)
-            else:
-                cam.set_sensor_hdr_mode(False)
+        try:
+            with IMX708(camera_num=self.__config.camera_num) as cam:
+                if enable:
+                    cam.set_sensor_hdr_mode(True)
+                else:
+                    cam.set_sensor_hdr_mode(False)
+        except Exception as exc:
+            logger.warning(f"could not set imx708 hdr mode, error: {exc}")
 
     async def run(self):
         # initialize private props
@@ -110,7 +113,8 @@ class Picam(CameraBackend):
             buffer_count=3,  # 3 recommended if sync is used
             controls={
                 "FrameRate": self.__config.framerate,
-                # "NoiseReductionMode": controls.draft.NoiseReductionModeEnum.Off,  # might have improved sync in earlier revs
+                # noise reduction might have impact on performance https://github.com/raspberrypi/picamera2/discussions/1158
+                "NoiseReductionMode": controls.draft.NoiseReductionModeEnum.Minimal,
                 **append_software_sync_control,
             },
             transform=Transform(hflip=self.__config.flip_horizontal, vflip=self.__config.flip_vertical),
