@@ -12,6 +12,7 @@ class CfgCameraPicamera2(CfgBaseSettings):
     camera_num: int = Field(default=0)
     framerate: int = Field(default=8)
     optimize_memoryconsumption: bool = Field(default=True)
+    software_sync: Literal["off", "server", "client"] = Field(default="off")
 
     camera_res_width: int = Field(default=2304)  # max 2304 if HDR type imx708, otherwise 4608
     camera_res_height: int = Field(default=1296)  # max 1296 if HDR type imx708, otherwise 2592

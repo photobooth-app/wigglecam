@@ -91,14 +91,28 @@ class Picam(CameraBackend):
             # https://github.com/raspberrypi/picamera2/discussions/1158#discussioncomment-11212355
             append_optmemory_format = {"format": "YUV420"}
 
+        # configure; synchronization enabled?
+        append_software_sync_control = {}
+        if self.__config.software_sync == "server":
+            logger.info("enabled synchronization, this node is configured as SERVER")
+            append_software_sync_control = {"SyncMode": controls.rpi.SyncModeEnum.Server}
+        elif self.__config.software_sync == "client":
+            logger.info("enabled synchronization, this node is configured as CLIENT")
+            append_software_sync_control = {"SyncMode": controls.rpi.SyncModeEnum.Client}
+        else:
+            logger.info("synchronization disabled.")
+
         camera_configuration = self.__picamera2.create_still_configuration(
             main={"size": (self.__config.camera_res_width, self.__config.camera_res_height), **append_optmemory_format},
             lores={"size": (self.__config.stream_res_width, self.__config.stream_res_height), **append_optmemory_format},
             encode="lores",
             display=None,
-            buffer_count=2,
-            # queue=True,  # TODO: validate. Seems False is working better on slower systems? but also on Pi5?
-            controls={"FrameRate": self.__config.framerate, "NoiseReductionMode": controls.draft.NoiseReductionModeEnum.Off},
+            buffer_count=3,  # 3 recommended if sync is used
+            controls={
+                "FrameRate": self.__config.framerate,
+                "NoiseReductionMode": controls.draft.NoiseReductionModeEnum.Off,  # TODO, maybe turn on again? YUV420 cpu issue on pi zero though maybe?
+                **append_software_sync_control,
+            },
             transform=Transform(hflip=self.__config.flip_horizontal, vflip=self.__config.flip_vertical),
         )
         self.__picamera2.configure(camera_configuration)
@@ -129,9 +143,14 @@ class Picam(CameraBackend):
         while True:
             # capture metadata blocks until new metadata is avail
             try:
-                _ = await asyncio.to_thread(self.__picamera2.capture_metadata)
+                if self.__config.software_sync == "off":
+                    meta = await asyncio.to_thread(self.__picamera2.capture_metadata)
+                else:
+                    req = self.__picamera2.capture_sync_request()
+                    meta = await asyncio.to_thread(req.get_metadata)
 
-                # print(meta["SensorTimestamp"])
+                print("Sensor Timestamp", meta["SensorTimestamp"])
+                print("Sync error:", meta["SyncTimer"])
 
             except TimeoutError as exc:
                 logger.warning(f"camera timed out: {exc}")
