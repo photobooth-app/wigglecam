@@ -110,7 +110,7 @@ class Picam(CameraBackend):
             buffer_count=3,  # 3 recommended if sync is used
             controls={
                 "FrameRate": self.__config.framerate,
-                "NoiseReductionMode": controls.draft.NoiseReductionModeEnum.Off,  # TODO, maybe turn on again? YUV420 cpu issue on pi zero though maybe?
+                "NoiseReductionMode": controls.draft.NoiseReductionModeEnum.Off,  # TODO, maybe turn on again? YUV420 cpu issue on pi zero maybe?
                 **append_software_sync_control,
             },
             transform=Transform(hflip=self.__config.flip_horizontal, vflip=self.__config.flip_vertical),
