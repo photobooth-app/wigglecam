@@ -38,10 +38,11 @@ dependencies = []
 node = [
   "pydantic",
   "pydantic-settings",
-  "opencv-contrib-python",
-  "pynng",                 # needs python3-dev package
-  "pillow>=10.0.0",
+  "opencv-python-headless>=4.10.0.84",
+  "pynng",                             # needs python3-dev package
+  "pillow>=11.0.0",
 ]
+demohub = ["opencv-python>=4.10.0.84"]
 
 
 [project.urls]
@@ -64,9 +65,7 @@ dev = [
   "coverage[toml]",
   "numpy",
   "pyright",
-  "simplejpeg",
   "poethepoet",
-  "pyturbojpeg>=1.8.0",                 # for benchmark only, actually use simplejpeg here
   #"picamera2; sys_platform == 'linux'", # need to install apt libcap-dev
 ]
 
