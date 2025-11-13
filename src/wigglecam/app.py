@@ -18,7 +18,12 @@ class CameraApp:
 
     async def job_task(self):
         while True:
-            job_uuid = await self.__trigger_input.receive_job_id()
+            try:
+                job_uuid = await asyncio.wait_for(self.__trigger_input.receive_job_id(), timeout=0.5)
+            except TimeoutError:
+                # use wait_for with timeout since otherwise receive_job_id would block for infinite time and app shutdown doesnt work well in pytest
+                continue
+
             await self.__camera.trigger_hires_capture(job_uuid)
 
     async def run(self):
