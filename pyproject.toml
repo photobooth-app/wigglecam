@@ -2,7 +2,7 @@
 [project]
 name = "wigglecam"
 description = "Wigglecam package help you building an awesome camera."
-version = "0.3.0"
+version = "0.4.0"
 authors = [{ name = "Michael G", email = "me@mgineer85.de" }]
 maintainers = [{ name = "Michael G", email = "me@mgineer85.de" }]
 requires-python = ">=3.11"
