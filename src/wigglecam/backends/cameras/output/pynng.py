@@ -12,7 +12,6 @@ class PynngCameraOutput(CameraOutput):
     def write(self, buf: bytes) -> int:
         """Synchronous send."""
         self.__pub.send(buf)
-
         return len(buf)
 
     async def awrite(self, buf: bytes) -> int:

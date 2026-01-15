@@ -39,10 +39,14 @@ class Picam(CameraBackend):
         logger.info(f"Picamera2Backend initialized, {device_id=}, listening for subs")
 
     async def trigger_hires_capture(self, job_id: uuid.UUID):
+        logger.debug("start producing hires capture")
+
         jpeg_bytes = await asyncio.to_thread(self._produce_image)
 
         msg_bytes = ImageMessage(self._device_id, jpg_bytes=jpeg_bytes, job_id=job_id).to_bytes()
         await self._output_hires.awrite(msg_bytes)
+
+        logger.info(f"hires capture {len(msg_bytes)} bytes written to output, device_id={self._device_id} {job_id=} ")
 
     def _produce_image(self) -> bytes:
         assert self.__picamera2

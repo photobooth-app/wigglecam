@@ -42,10 +42,14 @@ class Virtual(CameraBackend):
             await asyncio.sleep(1.0 / self.__config.fps_nominal)
 
     async def trigger_hires_capture(self, job_id: uuid.UUID):
+        logger.debug("start producing hires capture")
+
         produced_frame = await asyncio.to_thread(self._produce_dummy_image)
 
         msg_bytes = ImageMessage(self._device_id, jpg_bytes=produced_frame, job_id=job_id).to_bytes()
         await self._output_hires.awrite(msg_bytes)
+
+        logger.info(f"hires capture {len(msg_bytes)} bytes written to output, device_id={self._device_id} {job_id=} ")
 
     def _produce_dummy_image(self) -> bytes:
         """CPU-intensive image generator — run in a worker thread."""
