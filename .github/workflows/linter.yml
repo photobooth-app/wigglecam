@@ -20,6 +20,10 @@ jobs:
           python-version: '3.14'
           enable-cache: true
 
+      - name: install the picamera2
+        run: |
+          sudo apt install -y python3-picamera2
+
       - name: install the project
         run: |
           uv sync --all-extras --dev
