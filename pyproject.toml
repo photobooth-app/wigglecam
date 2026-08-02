@@ -2,7 +2,7 @@
 [project]
 name = "wigglecam"
 description = "Wigglecam package help you building an awesome camera."
-version = "0.4.1"
+version = "0.4.2"
 authors = [{ name = "Michael G", email = "me@mgineer85.de" }]
 maintainers = [{ name = "Michael G", email = "me@mgineer85.de" }]
 requires-python = ">=3.11"
@@ -37,11 +37,11 @@ dependencies = []
 node = [
   "pydantic",
   "pydantic-settings",
-  "opencv-python-headless>=4.10.0.84",
+  "opencv-python-headless~=5.0.0",
   "pynng",                             # needs python3-dev package
-  "pillow>=11.0.0",
+  "pillow>=12.1.1",
 ]
-demohub = ["opencv-python>=4.10.0.84"]
+demohub = ["opencv-python~=5.0.0"]
 
 
 [project.urls]
@@ -63,16 +63,16 @@ dev = [
   "pytest-asyncio",
   "coverage[toml]",
   "numpy",
-  "pyright",
+  "basedpyright",
   "poethepoet",
-  #"picamera2; sys_platform == 'linux'", # need to install apt libcap-dev
+  "picamera2; sys_platform == 'linux'", # need to install apt libcap-dev
 ]
 
 
 # uv does not yet support [tool.pdm.scripts], so we skip this for now... https://github.com/astral-sh/uv/issues/5903
 [tool.poe.tasks]
 lint = [
-  { cmd = "uv run pyright" },
+  { cmd = "uv run basedpyright" },
   { cmd = "uv run ruff check" },
   { cmd = "uv run ruff format --check" },
 ]
@@ -83,11 +83,13 @@ test = [
 benchmark = [
   { cmd = "pytest --benchmark-only --benchmark-autosave --basetemp=./tests_tmp/ -v ./src/tests/benchmarks" },
 ]
+list_outdated = [{ cmd = "uv pip list --outdated" }]
 
-[tool.pyright]
+
+[tool.basedpyright]
 venvPath = "."
 venv = ".venv"
-ignore = ["./experimental/", "./vendor/"]
+ignore = ["./experimental/"]
 typeCheckingMode = "standard"
 
 
@@ -131,7 +133,7 @@ concurrency = ["thread", "multiprocessing"]
 
 
 [build-system]
-requires = ["uv_build>=0.11.0,<0.12.0"]
+requires = ["uv_build>=0.11.0,<0.13.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
