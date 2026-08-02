@@ -20,12 +20,14 @@ jobs:
           python-version: '3.14'
           enable-cache: true
 
-      - name: install the picamera2
+      - name: install the picamera2 prereqisites
         run: |
-          sudo apt install -y python3-picamera2
+          sudo apt install -y build-essential libcap-dev
+
 
       - name: install the project
         run: |
+          uv add picamera2 # install from pypi in hosted env for proper linting.
           uv sync --all-extras --dev
           
       - name: Run linter
