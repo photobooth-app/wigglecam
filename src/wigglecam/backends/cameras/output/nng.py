@@ -5,6 +5,8 @@ from .base import CameraOutput
 
 class PynngCameraOutput(CameraOutput):
     def __init__(self, address: str):
+        super().__init__()
+
         self.__pub = pynng.Pub0()  # using pub instead push because we just want to broadcast and push would queue if not pulled
         self.__pub.listen(address)  # , block=False)
         # self.pub.listen("ipc:///home/michael/test.sock")

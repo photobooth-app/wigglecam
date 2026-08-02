@@ -12,6 +12,9 @@ class CameraBackend(abc.ABC):
         self._output_hires = output_hires
 
     @abc.abstractmethod
-    async def run(self): ...
+    async def run(self):
+        """function that is run in an eventloop to run the camera"""
+
     @abc.abstractmethod
-    async def trigger_hires_capture(self, job_id: uuid.UUID): ...
+    async def trigger_hires_capture(self, job_id: uuid.UUID):
+        """signals to the camera to produce a hires capture now"""

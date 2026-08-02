@@ -9,8 +9,8 @@ import sys
 from .app import CameraApp
 from .backends.cameras.base import CameraBackend
 from .backends.cameras.output.base import CameraOutput
-from .backends.cameras.output.pynng import PynngCameraOutput
-from .backends.triggers.input.pynng import PynngTriggerInput
+from .backends.cameras.output.nng import PynngCameraOutput
+from .backends.triggers.input.nng import PynngTriggerInput
 
 logger = logging.getLogger(__name__)
 

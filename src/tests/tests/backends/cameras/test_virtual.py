@@ -15,6 +15,8 @@ class DummyOutput(CameraOutput):
     """Mock CameraOutput that just stores written data."""
 
     def __init__(self):
+        super().__init__()
+
         self.written = []
 
     def write(self, buf: bytes) -> int:

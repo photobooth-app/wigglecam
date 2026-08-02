@@ -7,6 +7,8 @@ from .base import TriggerInput
 
 class PynngTriggerInput(TriggerInput):
     def __init__(self, address: str):
+        super().__init__()
+
         self.__sub = pynng.Sub0()
         self.__sub.subscribe(b"")
         self.__sub.listen(address=address)
