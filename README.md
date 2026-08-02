@@ -4,7 +4,7 @@ Welcome to your brand-new open-source wigglegram camera! Turn stereoscopic image
 This package is mainly thought to be used in combination with the photobooth-app with which is perfectly integrates.
 
 [![PyPI](https://img.shields.io/pypi/v/wigglecam)](https://pypi.org/project/wigglecam/)
-[![ruff](https://github.com/photobooth-app/wigglecam/actions/workflows/ruff.yml/badge.svg)](https://github.com/photobooth-app/wigglecam/actions/workflows/ruff.yml)
+[![lint](https://github.com/photobooth-app/wigglecam/actions/workflows/linter.yml/badge.svg)](https://github.com/photobooth-app/wigglecam/actions/workflows/linter.yml)
 [![pytest](https://github.com/photobooth-app/wigglecam/actions/workflows/pytests.yml/badge.svg)](https://github.com/photobooth-app/wigglecam/actions/workflows/pytests.yml)
 [![codecov](https://codecov.io/gh/photobooth-app/wigglecam/graph/badge.svg?token=87aLWw2gIT)](https://codecov.io/gh/photobooth-app/wigglecam)
 

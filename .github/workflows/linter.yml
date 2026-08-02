@@ -1,0 +1,30 @@
+name: lint
+permissions:
+  contents: read
+  
+on: 
+  [push, pull_request]
+
+
+jobs:
+  type-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Python and uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.14'
+          enable-cache: true
+
+      - name: install the project
+        run: |
+          uv sync --all-extras --dev
+          
+      - name: Run linter
+        run: |
+          uv run poe lint
+      
