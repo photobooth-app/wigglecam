@@ -65,7 +65,7 @@ dev = [
   "numpy",
   "basedpyright",
   "poethepoet",
-  "picamera2; sys_platform == 'linux'", # need to install apt libcap-dev
+  # "picamera2; sys_platform == 'linux'", # need to install apt libcap-dev, used during dev only
 ]
 
 
