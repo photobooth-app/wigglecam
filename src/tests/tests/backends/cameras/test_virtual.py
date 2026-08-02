@@ -32,7 +32,7 @@ async def test_produce_dummy_image_returns_valid_jpeg():
     hires = DummyOutput()
     cam = Virtual(device_id=1, output_lores=lores, output_hires=hires)
 
-    img_bytes = cam._produce_dummy_image()
+    img_bytes, frame_number1 = cam._produce_dummy_image()
 
     # Ensure bytes are non-empty and can be opened as JPEG
     assert isinstance(img_bytes, bytes)
@@ -40,6 +40,10 @@ async def test_produce_dummy_image_returns_valid_jpeg():
     img = Image.open(io.BytesIO(img_bytes))
     assert img.format == "JPEG"
     assert img.size == (250, 250)
+
+    _, frame_number2 = cam._produce_dummy_image()
+
+    assert frame_number2 > frame_number1
 
 
 @pytest.mark.asyncio

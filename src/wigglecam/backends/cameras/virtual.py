@@ -27,16 +27,17 @@ class Virtual(CameraBackend):
         self.__offset_x = 0
         self.__offset_y = 0
         self.__color_current = 0
+        self.__frame_number = 0
 
         logger.info(f"VirtualBackend initialized, {device_id=}, listening for subs")
 
     async def run(self):
         while True:
             # Offload CPU‑bound work to a thread
-            produced_frame = await asyncio.to_thread(self._produce_dummy_image)
+            produced_frame, fno = await asyncio.to_thread(self._produce_dummy_image)
 
             # For demo, use same image for lores and hires
-            msg_bytes = ImageMessage(self._device_id, jpg_bytes=produced_frame).to_bytes()
+            msg_bytes = ImageMessage(self._device_id, jpg_bytes=produced_frame, timestamp=fno).to_bytes()
             await self._output_lores.awrite(msg_bytes)
 
             await asyncio.sleep(1.0 / self.__config.fps_nominal)
@@ -44,19 +45,19 @@ class Virtual(CameraBackend):
     async def trigger_hires_capture(self, job_id: uuid.UUID):
         logger.debug("start producing hires capture")
 
-        produced_frame = await asyncio.to_thread(self._produce_dummy_image)
+        produced_frame, fno = await asyncio.to_thread(self._produce_dummy_image)
 
-        msg_bytes = ImageMessage(self._device_id, jpg_bytes=produced_frame, job_id=job_id).to_bytes()
+        msg_bytes = ImageMessage(self._device_id, jpg_bytes=produced_frame, job_id=job_id, timestamp=fno).to_bytes()
         await self._output_hires.awrite(msg_bytes)
 
         logger.info(f"hires capture {len(msg_bytes)} bytes written to output, device_id={self._device_id} {job_id=} ")
 
-    def _produce_dummy_image(self) -> bytes:
+    def _produce_dummy_image(self) -> tuple[bytes, int]:
         """CPU-intensive image generator — run in a worker thread."""
         offset_x = self.__offset_x
         offset_y = self.__offset_y
 
-        size = 250
+        size = 400
         ellipse_divider = 3
         color_steps = 100
         byte_io = io.BytesIO()
@@ -77,5 +78,9 @@ class Virtual(CameraBackend):
         random_image = Image.fromarray(imarray, "RGB")
         random_image.paste(mask, (size // ellipse_divider + offset_x, size // ellipse_divider + offset_y), mask=mask)
 
-        random_image.save(byte_io, format="JPEG", quality=70)
-        return byte_io.getvalue()
+        ImageDraw.Draw(random_image).text((size / 2, size / 2 + 10), f"#{self.__frame_number}", (0, 0, 0))
+
+        random_image.save(byte_io, format="JPEG", quality=85)
+        self.__frame_number += 1
+
+        return byte_io.getvalue(), self.__frame_number

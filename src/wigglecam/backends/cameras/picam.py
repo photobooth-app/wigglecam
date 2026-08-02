@@ -25,7 +25,8 @@ class PicameraEncoderOutputAdapter(Output):
         self.__output = output
 
     def outputframe(self, frame, keyframe=True, timestamp=None, packet=None, audio=False):
-        self.__output.write(ImageMessage(self.__device_id, jpg_bytes=frame, job_id=None).to_bytes())
+        ts = timestamp if timestamp is not None else 0
+        self.__output.write(ImageMessage(self.__device_id, jpg_bytes=frame, job_id=None, timestamp=ts).to_bytes())
 
 
 class Picam(CameraBackend):
@@ -41,21 +42,22 @@ class Picam(CameraBackend):
     async def trigger_hires_capture(self, job_id: uuid.UUID):
         logger.debug("start producing hires capture")
 
-        jpeg_bytes = await asyncio.to_thread(self._produce_image)
+        jpeg_bytes, sensor_timestamp = await asyncio.to_thread(self._produce_image)
 
-        msg_bytes = ImageMessage(self._device_id, jpg_bytes=jpeg_bytes, job_id=job_id).to_bytes()
+        msg_bytes = ImageMessage(self._device_id, jpg_bytes=jpeg_bytes, job_id=job_id, timestamp=sensor_timestamp).to_bytes()
         await self._output_hires.awrite(msg_bytes)
 
         logger.info(f"hires capture {len(msg_bytes)} bytes written to output, device_id={self._device_id} {job_id=} ")
 
-    def _produce_image(self) -> bytes:
+    def _produce_image(self) -> tuple[bytes, int]:
         assert self.__picamera2
 
         jpeg_buffer = io.BytesIO()
-        self.__picamera2.capture_file(jpeg_buffer, format="jpeg")
+        metadata = self.__picamera2.capture_file(jpeg_buffer, format="jpeg")
         jpeg_bytes = jpeg_buffer.getvalue()
+        sensor_timestamp = metadata.get("SensorTimestamp", 0)
 
-        return jpeg_bytes
+        return (jpeg_bytes, sensor_timestamp)
 
     def _set_pi5_hdr(self, enable: bool):
         """enable/disable Pi5 specific HDR."""
