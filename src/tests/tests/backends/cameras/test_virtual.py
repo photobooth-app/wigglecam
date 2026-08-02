@@ -39,7 +39,7 @@ async def test_produce_dummy_image_returns_valid_jpeg():
     assert len(img_bytes) > 100  # sanity check
     img = Image.open(io.BytesIO(img_bytes))
     assert img.format == "JPEG"
-    assert img.size == (250, 250)
+    assert img.size == (400, 400)
 
     _, frame_number2 = cam._produce_dummy_image()
 
